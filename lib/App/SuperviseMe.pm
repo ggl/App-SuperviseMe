@@ -8,109 +8,111 @@ use strict;
 use warnings;
 use Carp 'croak';
 use AnyEvent;
+use Data::Dumper;
 
-##############
+
 # Constructors
-
 sub new {
-  my ($class, %args) = @_;
+	my ($class, $cmds) = @_;
 
-  my $cmds = delete($args{cmds}) || [];
-  $cmds = [$cmds] unless ref($cmds) eq 'ARRAY';
-  for my $cmd (@$cmds) {
-    $cmd = [$cmd] unless ref($cmd) eq 'ARRAY';
-    $cmd = { cmd => $cmd };
-  }
+	croak "Argument must be a HASH" unless ref($cmds) eq 'HASH';
+	foreach my $cmd (keys %$cmds) {
+		$cmds->{$cmd} = {
+			cmd => $cmds->{$cmd},
+			start_delay => 1,
+			start_retries => 10,
+			stop_delay => 1,
+			stop_retries => 2,
+			stop_signal => 'TERM',
+			reload_signal => 'HUP'
+		} unless ref($cmd) eq 'HASH';
+	}
 
-  croak(q{Missing 'cmds',}) unless @$cmds;
-
-  return bless { cmds => $cmds }, $class;
-}
-
-sub new_from_options {
-  my ($class) = @_;
-
-  _out('Enter commands to supervise, one per line');
-
-  my @cmds;
-  while (my $l = <STDIN>) {
-    chomp $l;
-    $l =~ s/^\s+|\s+$//g;
-    next unless $l;
-    next if $l =~ /^#/;
-
-    push @cmds, $l;
-  }
-
-  return $class->new(cmds => \@cmds);
+	return bless { cmds => $cmds }, $class;
 }
 
 
-################
-# Start the show
-
+# Start everything
 sub run {
-  my $self = shift;
-  my $sv   = AE::cv;
+	my $self = shift;
+	my $sv = AE::cv;
 
-  my $int_s = AE::signal 'INT' => sub { $self->_signal_all_cmds('INT', $sv); };
-  my $term_s = AE::signal 'TERM' => sub { $self->_signal_all_cmds('TERM'); $sv->send };
+	foreach my $key (keys %{ $self->{cmds} }) {
+		my $cmd = $self->{cmds}->{$key};
+		my $int_s = AE::signal 'INT' => sub {
+			$self->_stop_cmd($cmd->{stop_signal => 'INT'}, $sv);
+		};
+		my $stop_s = AE::signal $cmd->{stop_signal} => sub {
+			$self->_stop_cmd($cmd);
+			$sv->send;
+		};
+		$self->_start_cmd($cmd);
+	}
 
-  for my $cmd (@{ $self->{cmds} }) {
-    $self->_start_cmd($cmd);
-  }
-
-  $sv->recv;
+	$sv->recv;
 }
 
-
-##########
-# Magic...
 
 sub _start_cmd {
-  my ($self, $cmd) = @_;
-  _debug("Starting '@{$cmd->{cmd}}'");
+	my ($self, $cmd) = @_;
 
-  my $pid = fork();
-  if (!defined $pid) {
-    _debug("fork() failed: $!");
-    $self->_restart_cmd($cmd);
-    return;
-  }
+	_debug("Starting '$cmd->{cmd}'");
+	my $pid = fork();
+	if (!defined $pid) {
+		_debug("fork() failed: $!");
+		$self->_restart_cmd($cmd);
+		return;
+	}
 
-  if ($pid == 0) {    ## Child
-    $cmd = $cmd->{cmd};
-    _debug("Exec'ing '@$cmd'");
-    exec(@$cmd);
-    exit(1);
-  }
+	# child
+	if ($pid == 0) {
+		$cmd = $cmd->{cmd};
+		_debug("Executing '$cmd'");
+		exec($cmd);
+		exit(1);
+	}
 
-  ## parent
-  _debug("Watching pid $pid for '@{$cmd->{cmd}}'");
-  $cmd->{pid} = $pid;
-  $cmd->{watcher} = AE::child $pid, sub { $self->_child_exited($cmd, @_) };
+	# parent
+	_debug("Watching pid $pid for '$cmd->{cmd}'");
+	$cmd->{pid} = $pid;
+	$cmd->{watcher} = AE::child $pid, sub { $self->_child_exited($cmd, @_) };
 
-  return;
+	return;
 }
 
 sub _child_exited {
-  my ($self, $cmd, undef, $status) = @_;
-  _debug("Child $cmd->{pid} exited, status $status: '@{$cmd->{cmd}}'");
+	my ($self, $cmd, undef, $status) = @_;
+	_debug("Child $cmd->{pid} exited, status $status: '$cmd->{cmd}'");
 
-  delete $cmd->{watcher};
-  delete $cmd->{pid};
+	delete $cmd->{watcher};
+	delete $cmd->{pid};
 
-  $cmd->{last_status} = $status >> 8;
+	$cmd->{last_status} = $status >> 8;
 
-  $self->_restart_cmd($cmd);
+	$self->_restart_cmd($cmd);
 }
 
 sub _restart_cmd {
-  my ($self, $cmd) = @_;
-  _debug("Restarting cmd '@{$cmd->{cmd}}' in 1 second");
+	my ($self, $cmd) = @_;
+	_debug("Restarting cmd '$cmd->{cmd}' in $cmd->{start_delay} seconds");
 
-  my $t;
-  $t = AE::timer 1, 0, sub { $self->_start_cmd($cmd); undef $t };
+	my $t;
+	$t = AE::timer $cmd->{start_delay}, 0, sub {
+		$self->_start_cmd($cmd);
+		undef $t;
+	};
+}
+
+sub _stop_cmd {
+	my ($self, $cmd, $cv) = @_;
+	_debug("Received signal $cmd->{stop_signal}");
+	_debug("... sent signal $cmd->{stop_signal} to $cmd->{pid}");
+	kill($cmd->{stop_signal}, $cmd->{pid});
+
+	return if $cv;
+
+	_debug('Exiting...');
+	$cv->send if $cv;
 }
 
 sub _signal_all_cmds {
@@ -130,25 +132,24 @@ sub _signal_all_cmds {
   $cv->send if $cv;
 }
 
-
 #########
 # Loggers
 
 sub _out {
-  return unless -t \*STDOUT && -t \*STDIN;
+	return unless -t \*STDOUT && -t \*STDIN;
 
-  print @_, "\n";
+	print @_, "\n";
 }
 
 sub _debug {
-  return unless $ENV{SUPERVISE_ME_DEBUG};
+	return unless $ENV{SUPERVISE_ME_DEBUG};
 
-  print STDERR "DEBUG [$$] ", @_, "\n";
+	print STDERR "DEBUG [$$] ", @_, "\n";
 }
 
 sub _error {
-  print "ERROR: ", @_, "\n";
-  return;
+	print "ERROR: ", @_, "\n";
+	return;
 }
 
 1;
