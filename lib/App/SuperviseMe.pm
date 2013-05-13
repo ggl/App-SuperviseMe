@@ -37,15 +37,22 @@ sub run {
 	my $self = shift;
 	my $sv = AE::cv;
 
+	my $int_s = AE::signal 'INT' => sub {
+		$self->_signal_all_cmds('INT', $sv);
+	};
+	my $term_s = AE::signal 'TERM' => sub {
+		$self->_signal_all_cmds('TERM');
+		$sv->send
+	};
 	foreach my $key (keys %{ $self->{cmds} }) {
 		my $cmd = $self->{cmds}->{$key};
-		my $int_s = AE::signal 'INT' => sub {
-			$self->_stop_cmd($cmd->{stop_signal => 'INT'}, $sv);
-		};
-		my $stop_s = AE::signal $cmd->{stop_signal} => sub {
-			$self->_stop_cmd($cmd);
-			$sv->send;
-		};
+		#my $int_s = AE::signal 'INT' => sub {
+			#$self->_stop_cmd($cmd->{stop_signal => 'INT'}, $sv);
+		#};
+		#my $stop_s = AE::signal $cmd->{stop_signal} => sub {
+			#$self->_stop_cmd($cmd);
+			#$sv->send;
+		#};
 		$self->_start_cmd($cmd);
 	}
 
@@ -116,20 +123,21 @@ sub _stop_cmd {
 }
 
 sub _signal_all_cmds {
-  my ($self, $signal, $cv) = @_;
-  _debug("Received signal $signal");
-  my $is_any_alive = 0;
-  for my $cmd (@{ $self->{cmds} }) {
-    next unless my $pid = $cmd->{pid};
-    _debug("... sent signal $signal to $pid");
-    $is_any_alive++;
-    kill($signal, $pid);
-  }
+	my ($self, $signal, $cv) = @_;
+	_debug("Received signal $signal");
+	my $is_any_alive = 0;
+	foreach my $key (keys %{ $self->{cmds} }) {
+		my $cmd = $self->{cmds}->{$key};
+		next unless my $pid = $cmd->{pid};
+		_debug("... sent signal $signal to $pid");
+		$is_any_alive++;
+		kill($signal, $pid);
+	}
 
-  return if $cv and $is_any_alive;
+	return if $cv and $is_any_alive;
 
-  _debug('Exiting...');
-  $cv->send if $cv;
+	_debug('Exiting...');
+	$cv->send if $cv;
 }
 
 #########
