@@ -46,13 +46,6 @@ sub run {
 	};
 	foreach my $key (keys %{ $self->{cmds} }) {
 		my $cmd = $self->{cmds}->{$key};
-		#my $int_s = AE::signal 'INT' => sub {
-			#$self->_stop_cmd($cmd->{stop_signal => 'INT'}, $sv);
-		#};
-		#my $stop_s = AE::signal $cmd->{stop_signal} => sub {
-			#$self->_stop_cmd($cmd);
-			#$sv->send;
-		#};
 		$self->_start_cmd($cmd);
 	}
 
