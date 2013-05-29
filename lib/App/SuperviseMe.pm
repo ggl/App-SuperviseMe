@@ -20,7 +20,7 @@ sub new {
 		$cmds->{$cmd} = {
 			cmd => $cmds->{$cmd},
 			start_delay => 1,
-			start_retries => 10,
+			start_retries => 5,
 			stop_delay => 1,
 			stop_retries => 2,
 			stop_signal => 'TERM',
@@ -40,6 +40,9 @@ sub run {
 	my $int_s = AE::signal 'INT' => sub {
 		$self->_signal_all_cmds('INT', $sv);
 	};
+	my $hup_s = AE::signal 'HUP' => sub {
+		$self->_signal_all_cmds('HUP', $sv);
+	};
 	my $term_s = AE::signal 'TERM' => sub {
 		$self->_signal_all_cmds('TERM');
 		$sv->send
@@ -55,8 +58,15 @@ sub run {
 
 sub _start_cmd {
 	my ($self, $cmd) = @_;
-
-	_debug("Starting '$cmd->{cmd}'");
+	
+	if ($cmd->{start_count}) {
+		$cmd->{start_count}++;
+	}
+	else {
+		$cmd->{start_count} = 1;
+	}
+	_debug("Starting '$cmd->{cmd}' attempt $cmd->{start_count}");
+	
 	my $pid = fork();
 	if (!defined $pid) {
 		_debug("fork() failed: $!");
@@ -94,8 +104,10 @@ sub _child_exited {
 
 sub _restart_cmd {
 	my ($self, $cmd) = @_;
-	_debug("Restarting cmd '$cmd->{cmd}' in $cmd->{start_delay} seconds");
-
+	return if ($cmd->{start_retries} &&
+		($cmd->{start_count} >= $cmd->{start_retries}));
+	_debug("Restarting '$cmd->{cmd}' in $cmd->{start_delay} seconds");
+	
 	my $t;
 	$t = AE::timer $cmd->{start_delay}, 0, sub {
 		$self->_start_cmd($cmd);
@@ -110,9 +122,6 @@ sub _stop_cmd {
 	kill($cmd->{stop_signal}, $cmd->{pid});
 
 	return if $cv;
-
-	_debug('Exiting...');
-	$cv->send if $cv;
 }
 
 sub _signal_all_cmds {
