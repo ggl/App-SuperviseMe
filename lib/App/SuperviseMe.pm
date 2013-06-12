@@ -8,35 +8,36 @@ use strict;
 use warnings;
 use Carp 'croak';
 use AnyEvent;
+use AnyEvent::Socket;
 use Data::Dumper;
 
 
 # Constructors
 sub new {
-	my ($class, $cmds) = @_;
-
-	croak "Argument must be a HASH" unless ref($cmds) eq 'HASH';
+	my ($class, $cmds, $conf) = @_;
+	
+	croak "Commands must be passed as a HASH ref" unless ref($cmds) eq 'HASH';
 	foreach my $cmd (keys %$cmds) {
 		$cmds->{$cmd} = {
 			cmd => $cmds->{$cmd},
 			start_delay => 1,
-			start_retries => 5,
+			start_retries => 10,
 			stop_delay => 1,
 			stop_retries => 2,
 			stop_signal => 'TERM',
 			reload_signal => 'HUP'
-		} unless ref($cmd) eq 'HASH';
+		} unless ref($cmds->{$cmd}) eq 'HASH';
 	}
-
-	return bless { cmds => $cmds }, $class;
+	
+	return bless { cmds => $cmds, conf => $conf }, $class;
 }
-
 
 # Start everything
 sub run {
 	my $self = shift;
 	my $sv = AE::cv;
 
+	#_debug(Dumper $self);
 	my $int_s = AE::signal 'INT' => sub {
 		$self->_signal_all_cmds('INT', $sv);
 	};
@@ -47,6 +48,7 @@ sub run {
 		$self->_signal_all_cmds('TERM');
 		$sv->send
 	};
+	$self->_listener() if $self->{conf}->{listen};
 	foreach my $key (keys %{ $self->{cmds} }) {
 		my $cmd = $self->{cmds}->{$key};
 		$self->_start_cmd($cmd);
@@ -58,7 +60,7 @@ sub run {
 
 sub _start_cmd {
 	my ($self, $cmd) = @_;
-	
+
 	if ($cmd->{start_count}) {
 		$cmd->{start_count}++;
 	}
@@ -92,23 +94,21 @@ sub _start_cmd {
 
 sub _child_exited {
 	my ($self, $cmd, undef, $status) = @_;
+	
 	_debug("Child $cmd->{pid} exited, status $status: '$cmd->{cmd}'");
-
 	delete $cmd->{watcher};
 	delete $cmd->{pid};
-
 	$cmd->{last_status} = $status >> 8;
-
 	$self->_restart_cmd($cmd);
 }
 
 sub _restart_cmd {
 	my ($self, $cmd) = @_;
-	return if ($cmd->{start_retries} &&
+
+	return if ($cmd->{start_retries} && 
 		($cmd->{start_count} >= $cmd->{start_retries}));
-	_debug("Restarting '$cmd->{cmd}' in $cmd->{start_delay} seconds");
-	
 	my $t;
+	_debug("Restarting '$cmd->{cmd}' in $cmd->{start_delay} seconds");
 	$t = AE::timer $cmd->{start_delay}, 0, sub {
 		$self->_start_cmd($cmd);
 		undef $t;
@@ -116,16 +116,18 @@ sub _restart_cmd {
 }
 
 sub _stop_cmd {
-	my ($self, $cmd, $cv) = @_;
-	_debug("Received signal $cmd->{stop_signal}");
-	_debug("... sent signal $cmd->{stop_signal} to $cmd->{pid}");
-	kill($cmd->{stop_signal}, $cmd->{pid});
-
-	return if $cv;
+	my ($self, $cmd) = @_;
+	
+	_debug("Sent signal $cmd->{stop_signal} to $cmd->{pid}");
+	my $st = kill($cmd->{stop_signal}, $cmd->{pid});
+	map { delete $cmd->{$_} } (qw(watcher pid start_count)) if $st;
+	
+	return $st;
 }
 
 sub _signal_all_cmds {
 	my ($self, $signal, $cv) = @_;
+	
 	_debug("Received signal $signal");
 	my $is_any_alive = 0;
 	foreach my $key (keys %{ $self->{cmds} }) {
@@ -142,18 +144,76 @@ sub _signal_all_cmds {
 	$cv->send if $cv;
 }
 
-#########
+# Contolling socket listener
+sub _listener {
+	my $self = shift;
+	
+	my ($host, $port) = parse_hostport($self->{conf}->{listen});
+	$self->{server} = tcp_server $host, $port,
+	sub { $self->_client_conn(@_) },
+	sub {
+		my ($fh, $host, $port) = @_;
+		_debug("Listener bound to $host:$port");
+	};
+}
+
+# Accept a new conenction
+sub _client_conn {
+	my ($self, $fh, $host, $port) = @_;
+	
+	_debug("Connection from $host:$port");
+	return unless $fh;
+	
+	foreach my $cmd (keys %{ $self->{cmds} }) {
+		my $name = $cmd;
+		$cmd = $self->{cmds}->{$cmd};
+		if ($cmd->{pid}) {
+			syswrite($fh, "$name up $cmd->{pid}\n");
+		}
+		elsif ($cmd->{start_count}) {
+			syswrite($fh, "$name fail $cmd->{start_count}\n");
+		}
+		else {
+			syswrite($fh, "$name down\n");
+		}
+	}
+	$self->_client_input($fh);
+	
+	return $fh;
+}
+
+# Client input
+sub _client_input {
+	my ($self, $fh) = @_;
+	
+	my $rw; $rw = AE::io $fh, 0,
+	sub {
+		while(defined(my $ln = <$fh>)) {
+			chomp $ln;
+			if ($ln eq '.') {
+				undef $rw;
+			}
+			else {
+				my $st;
+				my ($name, $sw) = split(' ', $ln);
+				if ($name && $sw eq 'down') {
+					$st = $self->_stop_cmd($self->{cmds}->{$name});
+				}
+				syswrite($fh, "$ln ok\n") if $st;
+			}
+		}
+	};
+}
+
 # Loggers
 
 sub _out {
 	return unless -t \*STDOUT && -t \*STDIN;
-
 	print @_, "\n";
 }
 
 sub _debug {
 	return unless $ENV{SUPERVISE_ME_DEBUG};
-
 	print STDERR "DEBUG [$$] ", @_, "\n";
 }
 
