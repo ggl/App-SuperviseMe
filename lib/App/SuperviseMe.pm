@@ -47,13 +47,13 @@ sub run {
 	my $term_s = AE::signal 'TERM' => sub {
 		$self->_signal_all_cmds('TERM');
 		$sv->send
-	};
+	};	
 	$self->_listener() if $self->{conf}->{listen};
 	foreach my $key (keys %{ $self->{cmds} }) {
 		my $cmd = $self->{cmds}->{$key};
 		$self->_start_cmd($cmd);
 	}
-
+	
 	$sv->recv;
 }
 
@@ -88,8 +88,7 @@ sub _start_cmd {
 	_debug("Watching pid $pid for '$cmd->{cmd}'");
 	$cmd->{pid} = $pid;
 	$cmd->{watcher} = AE::child $pid, sub { $self->_child_exited($cmd, @_) };
-
-	return;
+	return 1;
 }
 
 sub _child_exited {
@@ -198,6 +197,9 @@ sub _client_input {
 				my ($name, $sw) = split(' ', $ln);
 				if ($name && $sw eq 'down') {
 					$st = $self->_stop_cmd($self->{cmds}->{$name});
+				}
+				elsif ($name && $sw eq 'up') {
+					$st = $self->_start_cmd($self->{cmds}->{$name});
 				}
 				syswrite($fh, "$ln ok\n") if $st;
 			}
