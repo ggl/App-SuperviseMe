@@ -163,19 +163,7 @@ sub _client_conn {
 	_debug("Connection from $host:$port");
 	return unless $fh;
 	
-	foreach my $cmd (keys %{ $self->{cmds} }) {
-		my $name = $cmd;
-		$cmd = $self->{cmds}->{$cmd};
-		if ($cmd->{pid}) {
-			syswrite($fh, "$name up $cmd->{pid}\n");
-		}
-		elsif ($cmd->{start_count}) {
-			syswrite($fh, "$name fail $cmd->{start_count}\n");
-		}
-		else {
-			syswrite($fh, "$name down\n");
-		}
-	}
+	$self->_status($fh);
 	$self->_client_input($fh);
 	
 	return $fh;
@@ -189,22 +177,54 @@ sub _client_input {
 	sub {
 		while(defined(my $ln = <$fh>)) {
 			chomp $ln;
+			# generic commands
 			if ($ln eq '.') {
 				undef $rw;
+			}
+			elsif ($ln eq 'status') {
+				$self->_status($fh);
 			}
 			else {
 				my $st;
 				my ($name, $sw) = split(' ', $ln);
-				if ($name && $sw eq 'down') {
-					$st = $self->_stop_cmd($self->{cmds}->{$name});
+				return unless $name && $sw;
+				# control commands
+				if ($self->{cmds}->{$name} && $sw eq 'down') {
+					$st = $self->_stop_cmd($self->{cmds}->{$name})
+						if ($self->{cmds}->{$name}->{pid});
 				}
-				elsif ($name && $sw eq 'up') {
-					$st = $self->_start_cmd($self->{cmds}->{$name});
+				elsif ($self->{cmds}->{$name} && $sw eq 'up') {
+					$st = $self->_start_cmd($self->{cmds}->{$name})
+						unless ($self->{cmds}->{$name}->{pid});
+					$st = $self->{cmds}->{$name}->{pid} if $st;
 				}
-				syswrite($fh, "$ln ok\n") if $st;
+				# response
+				$st = $st ? $st : "fail";
+				syswrite($fh, "$ln $st\n") if $st;
+				undef $st;
 			}
 		}
 	};
+}
+
+# Commands status
+sub _status {
+	my ($self, $fh) = @_;
+	
+	return unless $fh;
+	foreach my $cmd (keys %{ $self->{cmds} }) {
+		my $name = $cmd;
+		$cmd = $self->{cmds}->{$cmd};
+		if ($cmd->{pid}) {
+			syswrite($fh, "$name up $cmd->{pid}\n");
+		}
+		elsif ($cmd->{start_count}) {
+			syswrite($fh, "$name fail $cmd->{start_count}\n");
+		}
+		else {
+			syswrite($fh, "$name down\n");
+		}
+	}
 }
 
 # Loggers
