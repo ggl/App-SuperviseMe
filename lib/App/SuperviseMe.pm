@@ -88,7 +88,9 @@ sub _start_cmd {
 	_debug("Watching pid $pid for '$cmd->{cmd}'");
 	$cmd->{pid} = $pid;
 	$cmd->{watcher} = AE::child $pid, sub { $self->_child_exited($cmd, @_) };
-	return 1;
+	delete $cmd->{start_count} if defined $pid;
+	
+	return $pid;
 }
 
 sub _child_exited {
@@ -104,10 +106,11 @@ sub _child_exited {
 sub _restart_cmd {
 	my ($self, $cmd) = @_;
 
-	return if ($cmd->{start_retries} && 
+	return if ($cmd->{start_retries} && $cmd->{start_count} && 
 		($cmd->{start_count} >= $cmd->{start_retries}));
-	my $t;
+	
 	_debug("Restarting '$cmd->{cmd}' in $cmd->{start_delay} seconds");
+	my $t;
 	$t = AE::timer $cmd->{start_delay}, 0, sub {
 		$self->_start_cmd($cmd);
 		undef $t;
@@ -120,6 +123,16 @@ sub _stop_cmd {
 	_debug("Sent signal $cmd->{stop_signal} to $cmd->{pid}");
 	my $st = kill($cmd->{stop_signal}, $cmd->{pid});
 	map { delete $cmd->{$_} } (qw(watcher pid start_count)) if $st;
+	
+	return $st;
+}
+
+sub _signal_cmd {
+	my ($self, $cmd, $signal) = @_;
+	
+	return unless ($cmd->{pid} && $signal);
+	_debug("Sent signal $signal to $cmd->{pid}");
+	my $st = kill($signal, $cmd->{pid});
 	
 	return $st;
 }
@@ -177,31 +190,38 @@ sub _client_input {
 	sub {
 		while(defined(my $ln = <$fh>)) {
 			chomp $ln;
-			# generic commands
-			if ($ln eq '.') {
+			# root commands
+			if ($ln =~ /^(\.|quit)$/) {
 				undef $rw;
 			}
 			elsif ($ln eq 'status') {
 				$self->_status($fh);
 			}
 			else {
-				my $st;
-				my ($name, $sw) = split(' ', $ln);
-				return unless $name && $sw;
-				# control commands
-				if ($self->{cmds}->{$name} && $sw eq 'down') {
-					$st = $self->_stop_cmd($self->{cmds}->{$name})
-						if ($self->{cmds}->{$name}->{pid});
+				my ($cmd, $sw) = split(' ', $ln);
+				if ($cmd && $sw) {
+					my $st;
+					$cmd = $self->{cmds}->{$cmd} if $self->{cmds}->{$cmd};
+					# control commands
+					if ($sw =~ /^(down|stop)$/) {
+						$st = $self->_stop_cmd($cmd) if $cmd->{pid};
+					}
+					elsif ($sw =~ /^(up|start)$/) {
+						$st = $self->_start_cmd($cmd) unless $cmd->{pid};
+					}
+					elsif ($sw eq 'reload') {
+						$st = $self->_signal_cmd($cmd, $cmd->{reload_signal})
+							if $cmd->{pid};
+					}
+					elsif ($sw eq 'restart') {
+						$st = $self->_signal_cmd($cmd, $cmd->{stop_signal})
+							if $cmd->{pid};
+					}
+					## response
+					$st = $st ? $st : "fail";
+					syswrite($fh, "$ln $st\n") if $st;
+					undef $st;
 				}
-				elsif ($self->{cmds}->{$name} && $sw eq 'up') {
-					$st = $self->_start_cmd($self->{cmds}->{$name})
-						unless ($self->{cmds}->{$name}->{pid});
-					$st = $self->{cmds}->{$name}->{pid} if $st;
-				}
-				# response
-				$st = $st ? $st : "fail";
-				syswrite($fh, "$ln $st\n") if $st;
-				undef $st;
 			}
 		}
 	};
