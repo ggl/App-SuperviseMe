@@ -1,6 +1,6 @@
-package App::SuperviseMe;
+package App::Sv;
 
-# ABSTRACT: very simple command superviser
+# ABSTRACT: Simple process supervisor
 # VERSION
 # AUTHORITY
 
