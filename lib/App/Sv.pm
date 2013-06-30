@@ -14,22 +14,25 @@ use Data::Dumper;
 
 # Constructors
 sub new {
-	my ($class, $cmds, $conf) = @_;
+	my ($class, $conf) = @_;
 	
-	croak "Commands must be passed as a HASH ref" unless ref($cmds) eq 'HASH';
-	foreach my $cmd (keys %$cmds) {
-		$cmds->{$cmd} = {
-			cmd => $cmds->{$cmd},
+	my $run = $conf->{run};
+	croak "Commands must be passed as a HASH ref" unless ref($run) eq 'HASH';
+	
+	# set default options
+	foreach my $cmd (keys %$run) {
+		$run->{$cmd} = {
+			cmd => $run->{$cmd},
 			start_delay => 1,
 			start_retries => 10,
 			stop_delay => 1,
-			stop_retries => 2,
+			stop_retries => 1,
 			stop_signal => 'TERM',
 			reload_signal => 'HUP'
-		} unless ref($cmds->{$cmd}) eq 'HASH';
+		} unless ref($run->{$cmd}) eq 'HASH';
 	}
 	
-	return bless { cmds => $cmds, conf => $conf }, $class;
+	return bless { run => $run, conf => $conf->{global} }, $class;
 }
 
 # Start everything
@@ -37,7 +40,6 @@ sub run {
 	my $self = shift;
 	my $sv = AE::cv;
 
-	#_debug(Dumper $self);
 	my $int_s = AE::signal 'INT' => sub {
 		$self->_signal_all_cmds('INT', $sv);
 	};
@@ -47,10 +49,14 @@ sub run {
 	my $term_s = AE::signal 'TERM' => sub {
 		$self->_signal_all_cmds('TERM');
 		$sv->send
-	};	
+	};
+	
+	# open control socket
 	$self->_listener() if $self->{conf}->{listen};
-	foreach my $key (keys %{ $self->{cmds} }) {
-		my $cmd = $self->{cmds}->{$key};
+	
+	# start all processes
+	foreach my $key (keys %{ $self->{run} }) {
+		my $cmd = $self->{run}->{$key};
 		$self->_start_cmd($cmd);
 	}
 	
@@ -142,8 +148,8 @@ sub _signal_all_cmds {
 	
 	_debug("Received signal $signal");
 	my $is_any_alive = 0;
-	foreach my $key (keys %{ $self->{cmds} }) {
-		my $cmd = $self->{cmds}->{$key};
+	foreach my $key (keys %{ $self->{run} }) {
+		my $cmd = $self->{run}->{$key};
 		next unless my $pid = $cmd->{pid};
 		_debug("... sent signal $signal to $pid");
 		$is_any_alive++;
@@ -201,7 +207,7 @@ sub _client_input {
 				my ($cmd, $sw) = split(' ', $ln);
 				if ($cmd && $sw) {
 					my $st;
-					$cmd = $self->{cmds}->{$cmd} if $self->{cmds}->{$cmd};
+					$cmd = $self->{run}->{$cmd} if $self->{run}->{$cmd};
 					# control commands
 					if ($sw =~ /^(down|stop)$/) {
 						$st = $self->_stop_cmd($cmd) if $cmd->{pid};
@@ -232,9 +238,9 @@ sub _status {
 	my ($self, $fh) = @_;
 	
 	return unless $fh;
-	foreach my $cmd (keys %{ $self->{cmds} }) {
+	foreach my $cmd (keys %{ $self->{run} }) {
 		my $name = $cmd;
-		$cmd = $self->{cmds}->{$cmd};
+		$cmd = $self->{run}->{$cmd};
 		if ($cmd->{pid}) {
 			syswrite($fh, "$name up $cmd->{pid}\n");
 		}
@@ -255,7 +261,7 @@ sub _out {
 }
 
 sub _debug {
-	return unless $ENV{SUPERVISE_ME_DEBUG};
+	return unless $ENV{SV_DEBUG};
 	print STDERR "DEBUG [$$] ", @_, "\n";
 }
 

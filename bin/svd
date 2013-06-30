@@ -5,13 +5,47 @@ package    ## Hide from PAUSE and Dist::Zilla
 
 use strict;
 use warnings;
-use App::SuperviseMe;
+
+use Getopt::Std;
+use YAML::Tiny;
+
+use lib '../lib';
+use App::Sv;
 
 # ABSTRACT: supervises a list of commands
 # VERSION
 # AUTHORITY
 
-App::SuperviseMe->new_from_options->run;
+my %opt;
+getopts('dc:', \%opt);
+
+# read config
+my $conf;
+my $yt = YAML::Tiny->new();
+if ($opt{c} && -f $opt{c}) {
+	$conf = $yt->read($opt{c})
+		or die "Cannot open config file \'$opt{c}\': $!";
+	$conf = $conf->[0];
+}
+else {
+	my $cf = $ENV{SV_HOME} ? "$ENV{SV_HOME}/sv.yml" : "$ENV{HOME}/.sv/sv.yml";
+	die "No config file found" unless -f $cf;
+	$conf = $yt->read($cf)
+		or die "Cannot open config file \'$cf\': $!";
+	$conf = $conf->[0];
+}
+
+# daemonize
+if ($opt{d} || $conf->{global}->{daemon}) {
+	open(STDIN, "</dev/null");
+	open(STDOUT, "+>/dev/null");
+	open(STDERR, "+>/dev/null");
+	my $pid = fork();
+	exit 0 if $pid;
+}
+
+my $s = App::Sv->new($conf);
+$s->run;
 
 __END__
 
