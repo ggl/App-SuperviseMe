@@ -51,7 +51,7 @@ sub run {
 		$sv->send
 	};
 	
-	# open control socket
+	# open controling socket
 	$self->_listener() if $self->{conf}->{listen};
 	
 	# start all processes
