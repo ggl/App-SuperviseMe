@@ -18,6 +18,7 @@ sub new {
 	
 	my $run = $conf->{run};
 	croak "Commands must be passed as a HASH ref" unless ref($run) eq 'HASH';
+	croak "Missing command list" unless scalar (keys %$run) > 0;
 	
 	# set default options
 	foreach my $cmd (keys %$run) {
@@ -278,7 +279,7 @@ __END__
 
 =head1 SYNOPSIS
 
-    my $superviser = App::SuperviseMe->new(
+    my $sv = App::Sv->new(
         cmds => [
           'plackup -p 3010 ./sites/x/app.psgi',
           'plackup -p 3011 ./sites/y/app.psgi',
