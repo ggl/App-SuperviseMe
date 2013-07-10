@@ -14,7 +14,18 @@ use Data::Dumper;
 
 # Constructors
 sub new {
-	my ($class, $conf) = @_;
+	my $class = shift;
+	my $conf;
+	
+	if (@_ && scalar @_ > 1) {
+		croak "Odd number of arguments to App::Sv" if @_ % 2 != 0;
+		foreach my $id (0..$#_) {
+			$conf->{$_[$id]} = $_[$id+1] if $id % 2 == 0;
+		}
+	}
+	else {
+		$conf = shift @_;
+	}
 	
 	my $run = $conf->{run};
 	croak "Commands must be passed as a HASH ref" unless ref($run) eq 'HASH';
@@ -197,7 +208,7 @@ sub _client_input {
 	sub {
 		while(defined(my $ln = <$fh>)) {
 			chomp $ln;
-			# root commands
+			# generic commands
 			if ($ln =~ /^(\.|quit)$/) {
 				undef $rw;
 			}
@@ -224,7 +235,7 @@ sub _client_input {
 						$st = $self->_signal_cmd($cmd, $cmd->{stop_signal})
 							if $cmd->{pid};
 					}
-					## response
+					# response
 					$st = $st ? $st : "fail";
 					syswrite($fh, "$ln $st\n") if $st;
 					undef $st;
@@ -280,13 +291,24 @@ __END__
 =head1 SYNOPSIS
 
     my $sv = App::Sv->new(
-        cmds => [
-          'plackup -p 3010 ./sites/x/app.psgi',
-          'plackup -p 3011 ./sites/y/app.psgi',
-          ['bash', '-c', '... bash script ...'],
-        ],
+        run => {
+          x => 'plackup -p 3010 ./sites/x/app.psgi',
+          y => {
+            cmd => 'plackup -p 3011 ./sites/y/app.psgi'
+            start_delay => 1,
+            start_retries => 5,
+            stop_delay => 1,
+            stop_retries => 1,
+            stop_signal => 'TERM',
+            reload_signal => 'HUP'
+		  },
+        },
+        global => {
+          listen => '127.0.0.1:9999',
+          daemon => 0
+		}
     );
-    $superviser->run;
+    $sv->run;
 
 
 =head1 DESCRIPTION
@@ -295,50 +317,42 @@ This module implements a multi-process supervisor.
 
 It takes a list of commands to execute and starts each one, and then monitors
 their execution. If one of the program dies, the supervisor will restart it
-after a small 1 second pause.
+after a preset delay.
 
 You can send SIGTERM to the supervisor process to kill all childs and exit.
 
 You can also send SIGINT (Ctrl-C on your terminal) to restart the processes. If
 a second SIGINT is received and no child process is currently running, the
-supervisor will exit. This allows you to tap Ctrl- C twice in quick succession
-in a terminal window to terminate the supervisor and all child processes
+supervisor will exit. This allows you to tap Ctrl-C twice in quick succession
+in a terminal window to terminate the supervisor and all child processes.
 
 
 =head1 METHODS
 
 =head2 new
 
-    my $supervisor = App::SuperviseMe->new( cmds => [...]);
+    my $sv = App::Sv->new({ run => {...}, global => {...} });
 
 Creates a supervisor instance with a list of commands to monitor.
 
-It accepts a hash with the following options:
+It accepts an anonymous hash with the following options:
 
 =over 4
 
-=item cmds
+=item run
 
-A list reference with the commands to execute and monitor. Each command can be
-a scalar, or a list reference.
+A hash reference with the commands to execute and monitor. Each command can be
+a scalar, or a hash reference.
+
+=item global
+
+A hash reference with the global configuration, such as the control socket.
 
 =back
 
-
-=head2 new_from_options
-
-    my $supervisor = App::SuperviseMe->new_from_options;
-
-Reads the list of commands to start and monitor from C<STDIN>. It strips
-white-space from the beggining and end of the line, and skips lines that start
-with a C<#>.
-
-Returns the superviser object.
-
-
 =head2 run
 
-    $supervisor->run;
+    $sv->run;
 
 Starts the supervisor, start all the child processes and monitors each one.
 
@@ -348,6 +362,7 @@ SIGTERM.
 
 =head1 SEE ALSO
 
+L<App::SuperviseMe>
 L<AnyEvent>
 
 
