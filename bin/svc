@@ -1,0 +1,160 @@
+#!/usr/bin/env perl
+
+package    ## Hide from PAUSE and Dist::Zilla
+  svc;
+
+use strict;
+use warnings;
+
+use AnyEvent;
+use AnyEvent::Socket;
+use AnyEvent::Handle;
+use YAML::Tiny;
+use Data::Dumper;
+
+# ABSTRACT: controls supervised commands
+# VERSION
+# AUTHORITY
+
+my $conf;
+my $cf;
+
+# read config
+$cf = $ENV{SV_CONF}	? $ENV{SV_CONF}
+	: $ENV{SV_HOME} ? "$ENV{SV_HOME}/sv.yml"
+	: "$ENV{HOME}/.sv/sv.yml";
+die "No config file found" unless -f $cf;
+my $yt = YAML::Tiny->new();
+$conf = $yt->read($cf) or die "Cannot open config file \'$cf\': $!";
+$conf = $conf->[0];
+die "No \'listen\' directive found in config" 
+	unless $conf->{global}->{listen};
+my $args = join(" ", @ARGV);
+my $cv = _connect($conf->{global}->{listen}, $args);
+print $cv->recv;
+
+# connect to socket
+sub _connect {
+	my ($listen, $args) = @_;
+	
+	my $cv = AE::cv;
+	my ($host, $port) = parse_hostport($conf->{global}->{listen});
+	tcp_connect $host, $port, sub {
+		my ($fh, $host, $port) = @_ 
+			or return $cv->send("Unable to connect to $host:$port: $!\n");
+		
+		my $res;
+		my $hdl; $hdl = AnyEvent::Handle->new(
+			fh => $fh,
+			on_eof => sub {
+				$hdl->destroy();
+				print("ok\n");
+				$cv->send;
+			},
+			on_error => sub {
+				print("error\n");
+				$hdl->destroy();
+				$cv->send;
+			}
+		);
+
+		$hdl->push_write("$args\n");
+		$hdl->push_read(line => sub {
+			my ($hdl, $ln) = @_;
+			
+			$hdl->on_read(sub {
+				$cv->send($_[0]->rbuf);
+			});
+		});
+	};
+	
+	return $cv;
+}
+
+__END__
+
+=encoding utf8
+
+=head1 SYNOPSIS
+
+    # Make sure you export SV_HOME or SV_CONFIG
+    $ cat sv.yml
+    ---
+    global:
+      listen: unix/:/tmp/sv.sock
+      daemon: 0
+      umask: 077
+    run:
+      x: 'plackup -p 3010 ./sites/x/app.psgi'
+      y:
+        cmd: 'plackup -p 3011 ./sites/y/app.psgi'
+        reload_signal: HUP
+        start_delay: 1
+        start_retries: 5
+        stop_signal: TERM
+        umask: 027
+        user: www
+        group: www
+        
+    $ svc stop x
+    
+=head1 DESCRIPTION
+
+The C<svc> command is a simple client for the supervisor server.
+
+It connects to the server's socket, issues the commands supplied as its
+arguments and displays the server's response.
+
+=head1 ARGUMENTS
+
+The script accepts the following arguments.
+
+=over 4
+
+=item status
+
+Requests a status showing the supervised process names, their uptime and PID.
+
+=item start <name>
+
+Starts the specified process.
+
+=item stop <name>
+
+Stops the process.
+
+=item restart <name>
+
+Restarts the process. The server sends stop_signal to the process and then
+restarts it automatically after start_delay seconds.
+
+=item reload <name>
+
+Reloads the process. The server sends reload_signal to the process and then
+restarts it after start_delay seconds if necessary.
+
+=back
+
+
+=head1 OPTIONS
+
+The does not accept any command line options.
+
+=head1 ENVIRONMENT
+
+=over 4
+
+=item SV_HOME
+
+Specifies the default home directory where C<svc> searches for the config
+file.
+
+=item SV_CONF
+
+The full path to the supervisor's configuration file.
+
+=back
+
+=head1 SEE ALSO
+
+L<App::Sv>
