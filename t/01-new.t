@@ -21,8 +21,6 @@ subtest 'basic constructor' => sub {
 				cmd => 'a',
 				start_delay => 1,
 				start_retries => 10,
-				stop_signal => 'TERM',
-				reload_signal => 'HUP'
 			}
 		},
 		'... with the expected command list'
@@ -38,15 +36,11 @@ subtest 'basic constructor' => sub {
 				cmd => 'a',
 				start_delay => 1,
 				start_retries => 10,
-				stop_signal => 'TERM',
-				reload_signal => 'HUP'
 			},
 			b => {
 				cmd => 'b',
 				start_delay => 1,
 				start_retries => 10,
-				stop_signal => 'TERM',
-				reload_signal => 'HUP'
 			}
 		},
 		'... with the expected command list'

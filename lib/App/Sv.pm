@@ -7,6 +7,7 @@ package App::Sv;
 use strict;
 use warnings;
 use Carp 'croak';
+use POSIX 'strftime';
 use AnyEvent;
 use AnyEvent::Socket;
 use AnyEvent::Handle;
@@ -30,6 +31,7 @@ sub new {
 	}
 	
 	my $run = $conf->{run};
+	$conf->{global}->{log} = delete $conf->{log};
 	croak "Commands must be passed as a HASH ref" unless ref($run) eq 'HASH';
 	croak "Missing command list" unless scalar (keys %$run) > 0;
 	
@@ -37,16 +39,14 @@ sub new {
 	my $defaults = {
 		start_delay => 1,
 		start_retries => 10,
-		stop_signal => 'TERM',
-		reload_signal => 'HUP',
 	};
-	foreach my $cmd (keys %$run) {
-		$run->{$cmd} = { cmd => $run->{$cmd} } 
-			if (ref($run->{$cmd}) ne 'HASH');
-		croak "Missing command for \'$cmd\'" unless $run->{$cmd}->{cmd};
+	foreach my $svc (keys %$run) {
+		$run->{$svc} = { cmd => $run->{$svc} } 
+			if (ref($run->{$svc}) ne 'HASH');
+		croak "Missing command for \'$svc\'" unless $run->{$svc}->{cmd};
 		foreach my $opt (keys %$defaults) { 
-			$run->{$cmd}->{$opt} = $defaults->{$opt}
-				unless defined $run->{$cmd}->{$opt};
+			$run->{$svc}->{$opt} = $defaults->{$opt}
+				unless defined $run->{$svc}->{$opt};
 		}
 	}
 	
@@ -56,148 +56,148 @@ sub new {
 # Start everything
 sub run {
 	my $self = shift;
-	my $sv = AE::cv;
+	my $cv = AE::cv;
 	
+	# signal watchers
 	my $int_s = AE::signal 'INT' => sub {
-		$self->_signal_all_cmds('INT', $sv);
+		$self->_signal_all_svc('INT', $cv);
 	};
 	my $hup_s = AE::signal 'HUP' => sub {
-		$self->_signal_all_cmds('HUP', $sv);
+		$self->_signal_all_svc('HUP', $cv);
 	};
 	my $term_s = AE::signal 'TERM' => sub {
-		$self->_signal_all_cmds('TERM');
-		$sv->send
+		$self->_signal_all_svc('TERM');
+		$cv->send
 	};
 	
 	# set global umask
 	umask oct($self->{conf}->{umask}) if $self->{conf}->{umask};
-	
 	# initialize logger
 	$self->_logger();
-	
-	# open controling socket
+	# open controling socket; load commands
 	$self->_listener() if $self->{conf}->{listen};
+	$self->{cmds} = $self->_client_cmds() if ref $self->{server} eq 'Guard';
 	
-	# start all processes
+	# start all services
 	foreach my $key (keys %{ $self->{run} }) {
-		my $cmd = $self->{run}->{$key};
-		$self->_start_cmd($cmd);
+		my $svc = $self->{run}->{$key};
+		$self->_start_svc($svc);
 	}
 	
-	$sv->recv;
+	$cv->recv;
 }
 
-sub _start_cmd {
-	my ($self, $cmd) = @_;
+sub _start_svc {
+	my ($self, $svc) = @_;
 	
 	my $debug = $self->{log}->logger(8);
-	if ($cmd->{start_count}) {
-		$cmd->{start_count}++;
+	if ($svc->{start_count}) {
+		$svc->{start_count}++;
 	}
 	else {
-		$cmd->{start_count} = 1;
+		$svc->{start_count} = 1;
 	}
-	$debug->("Starting '$cmd->{cmd}' attempt $cmd->{start_count}");
+	$debug->("Starting '$svc->{cmd}' attempt $svc->{start_count}");
 	
 	# set process umask
 	my $oldmask;
-	if ($cmd->{umask}) {
+	if ($svc->{umask}) {
 		$oldmask = umask;
-		umask oct($cmd->{umask});
+		umask oct($svc->{umask});
 	}
 	
 	my $pid = fork();
 	if (!defined $pid) {
 		$debug->("fork() failed: $!");
-		$self->_restart_cmd($cmd);
+		$self->_restart_svc($svc);
 		return;
 	}
 
 	# child
 	if ($pid == 0) {
 		# set egid/euid
-		if ($cmd->{group}) {
-			$cmd->{gid} = getgrnam($cmd->{group});
-			$) = $cmd->{gid};
+		if ($svc->{group}) {
+			$svc->{gid} = getgrnam($svc->{group});
+			$) = $svc->{gid};
 		}
-		if ($cmd->{user}) {
-			$cmd->{uid} = getpwnam($cmd->{user});
-			$> = $cmd->{uid};
+		if ($svc->{user}) {
+			$svc->{uid} = getpwnam($svc->{user});
+			$> = $svc->{uid};
 		}
-		$cmd = $cmd->{cmd};
+		my $cmd = $svc->{cmd};
 		$debug->("Executing '$cmd'");
 		exec($cmd);
 		exit(1);
 	}
 
 	# parent
-	$debug->("Watching pid $pid for '$cmd->{cmd}'");
-	$cmd->{pid} = $pid;
-	$cmd->{watcher} = AE::child $pid, sub { $self->_child_exited($cmd, @_) };
-	$cmd->{start_ts} = time;
+	$debug->("Watching pid $pid for '$svc->{cmd}'");
+	$svc->{pid} = $pid;
+	$svc->{watcher} = AE::child $pid, sub { $self->_child_exited($svc, @_) };
+	$svc->{start_ts} = time;
 	umask $oldmask if $oldmask;
 	
 	return $pid;
 }
 
 sub _child_exited {
-	my ($self, $cmd, undef, $status) = @_;
+	my ($self, $svc, undef, $status) = @_;
 	
 	my $debug = $self->{log}->logger(8);
-	$debug->("Child $cmd->{pid} exited, status $status: \'$cmd->{cmd}\'");
-	delete $cmd->{watcher};
-	delete $cmd->{pid};
-	delete $cmd->{start_count}
-		if (time - $cmd->{start_ts} > $cmd->{start_delay});
-	$cmd->{last_status} = $status >> 8;
-	$self->_restart_cmd($cmd);
+	$debug->("Child $svc->{pid} exited, status $status: '$svc->{cmd}'");
+	delete $svc->{watcher};
+	delete $svc->{pid};
+	delete $svc->{start_count}
+		if (time - $svc->{start_ts} > $svc->{start_delay});
+	$svc->{last_status} = $status >> 8;
+	$self->_restart_svc($svc) unless $svc->{once};
 }
 
-sub _restart_cmd {
-	my ($self, $cmd) = @_;
+sub _restart_svc {
+	my ($self, $svc) = @_;
 
-	return if ($cmd->{start_retries} && $cmd->{start_count} && 
-		($cmd->{start_count} >= $cmd->{start_retries}));
+	return if ($svc->{start_retries} && $svc->{start_count} && 
+		($svc->{start_count} >= $svc->{start_retries}));
 	my $debug = $self->{log}->logger(8);
-	$debug->("Restarting '$cmd->{cmd}' in $cmd->{start_delay} seconds");
-	my $t; $t = AE::timer $cmd->{start_delay}, 0, sub {
-		$self->_start_cmd($cmd);
+	$debug->("Restarting '$svc->{cmd}' in $svc->{start_delay} seconds");
+	my $t; $t = AE::timer $svc->{start_delay}, 0, sub {
+		$self->_start_svc($svc);
 		undef $t;
 	};
 }
 
-sub _stop_cmd {
-	my ($self, $cmd) = @_;
+sub _stop_svc {
+	my ($self, $svc) = @_;
 	
 	my $debug = $self->{log}->logger(8);
-	$debug->("Sent signal $cmd->{stop_signal} to $cmd->{pid}");
-	my $st = kill($cmd->{stop_signal}, $cmd->{pid});
-	map { delete $cmd->{$_} } (qw(watcher pid start_count)) if $st;
+	$debug->("Sent TERM signal to pid $svc->{pid}");
+	my $st = kill('TERM', $svc->{pid});
+	map { delete $svc->{$_} } (qw(watcher pid start_count)) if $st;
 	
 	return $st;
 }
 
-sub _signal_cmd {
-	my ($self, $cmd, $signal) = @_;
+sub _signal_svc {
+	my ($self, $svc, $sig) = @_;
 	
-	return unless ($cmd->{pid} && $signal);
+	return unless ($svc->{pid} && $sig);
 	my $debug = $self->{log}->logger(8);
-	$debug->("Sent signal $signal to $cmd->{pid}");
-	my $st = kill($signal, $cmd->{pid});
+	$debug->("Sent signal $sig to pid $svc->{pid}");
+	my $st = kill($sig, $svc->{pid});
 	
 	return $st;
 }
 
-sub _signal_all_cmds {
+sub _signal_all_svc {
 	my ($self, $signal, $cv) = @_;
 	
 	my $debug = $self->{log}->logger(8);
 	$debug->("Received signal $signal");
 	my $is_any_alive = 0;
 	foreach my $key (keys %{ $self->{run} }) {
-		my $cmd = $self->{run}->{$key};
-		next unless my $pid = $cmd->{pid};
-		$debug->("... sent signal $signal to $pid");
+		my $svc = $self->{run}->{$key};
+		next unless my $pid = $svc->{pid};
+		$debug->("... sent signal $signal to pid $pid");
 		$is_any_alive++;
 		kill($signal, $pid);
 	}
@@ -208,7 +208,7 @@ sub _signal_all_cmds {
 	$cv->send if $cv;
 }
 
-# Contolling socket listener
+# Contolling socket
 sub _listener {
 	my $self = shift;
 	
@@ -255,6 +255,7 @@ sub _client_input {
 		my ($hdl, $ln) = @_;
 		
 		my $client = $self->{conn}->{fileno($hdl->fh)};
+		my $cmds = $self->{cmds};
 		if ($ln) {
 			# generic commands
 			$hdl->push_write("\n");
@@ -264,36 +265,21 @@ sub _client_input {
 			elsif ($ln eq 'status') {
 				$self->_status($hdl);
 			}
-			elsif ($ln =~ / /) {
-				my ($sw, $cmd) = split(' ', $ln);
-				if ($sw && $cmd) {
+			elsif (index($ln, ' ') >= 0) {
+				my ($sw, $svc) = split(' ', $ln);
+				if ($sw && $svc) {
 					my $st;
-					if ($self->{run}->{$cmd}) {
-						$cmd = $self->{run}->{$cmd}
+					if ($self->{run}->{$svc} && ref $cmds->{$sw} eq 'CODE') {
+						$svc = $self->{run}->{$svc};
+						$st = $cmds->{$sw}->($svc);
 					}
 					else {
 						$hdl->push_write("$ln unknown\n");
 						return;
 					}
-					# control commands
-					if ($sw eq 'stop') {
-						$st = $self->_stop_cmd($cmd) if $cmd->{pid};
-					}
-					elsif ($sw eq 'start') {
-						$st = $self->_start_cmd($cmd) unless $cmd->{pid};
-					}
-					elsif ($sw eq 'reload') {
-						$st = $self->_signal_cmd($cmd, $cmd->{reload_signal})
-							if $cmd->{pid};
-					}
-					elsif ($sw eq 'restart') {
-						$st = $self->_signal_cmd($cmd, $cmd->{stop_signal})
-							if $cmd->{pid};
-					}
 					# response
 					$st = $st ? $st : 'fail';
 					$hdl->push_write("$ln $st\n") if $st;
-					undef $st;
 				}
 			}
 			else {
@@ -321,20 +307,85 @@ sub _client_error {
 	$hdl->destroy();
 }
 
+sub _client_cmds {
+	my $self = shift;
+	
+	my $cmds = {
+		up => sub {
+			unless ($_[0]->{pid}) {
+				delete $_[0]->{once};
+				return $self->_start_svc($_[0]);
+			}
+		},
+		once => sub {
+			unless ($_[0]->{pid}) {
+				$_[0]->{once} = 1;
+				return $self->_start_svc($_[0]);
+			}
+		},
+		down => sub {
+			return $self->_stop_svc($_[0]) if $_[0]->{pid};
+		},
+		pause => sub {
+			return $self->_signal_svc($_[0], 'STOP') if $_[0]->{pid};
+		},
+		cont => sub {
+			return $self->_signal_svc($_[0], 'CONT') if $_[0]->{pid};
+		},
+		hup => sub {
+			return $self->_signal_svc($_[0], 'HUP') if $_[0]->{pid};
+		},
+		alarm => sub {
+			return $self->_signal_svc($_[0], 'ALRM') if $_[0]->{pid};
+		},
+		int => sub {
+			return $self->_signal_svc($_[0], 'INT') if $_[0]->{pid};
+		},
+		quit => sub {
+			return $self->_signal_svc($_[0], 'QUIT') if $_[0]->{pid};
+		},
+		usr1 => sub {
+			return $self->_signal_svc($_[0], 'USR1') if $_[0]->{pid};
+		},
+		usr2 => sub {
+			return $self->_signal_svc($_[0], 'USR2') if $_[0]->{pid};
+		},
+		term => sub {
+			return $self->_signal_svc($_[0], 'TERM') if $_[0]->{pid};
+		},
+		kill => sub {
+			return $self->_signal_svc($_[0], 'KILL') if $_[0]->{pid};
+		},
+		status => sub {
+			if ($_[0]->{pid} && $_[0]->{start_ts}) {
+				return (time - $_[0]->{start_ts}).' '.$_[0]->{pid};
+			}
+			elsif ($_[0]->{start_count}) {
+				return "fail $_[0]->{start_count}";
+			}
+			else {
+				return 'down';
+			}
+		}
+	};
+	
+	return $cmds;
+}
+
 # Commands status
 sub _status {
 	my ($self, $hdl) = @_;
 	
 	return unless $hdl;
-	foreach my $cmd (keys %{ $self->{run} }) {
-		my $name = $cmd;
-		$cmd = $self->{run}->{$cmd};
-		if ($cmd->{pid}) {
-			my $uptime = time - $cmd->{start_ts};
-			$hdl->push_write("$name up $uptime $cmd->{pid}\n");
+	foreach my $svc (keys %{ $self->{run} }) {
+		my $name = $svc;
+		$svc = $self->{run}->{$svc};
+		if ($svc->{pid} && $svc->{start_ts}) {
+			my $uptime = time - $svc->{start_ts};
+			$hdl->push_write("$name up $uptime $svc->{pid}\n");
 		}
-		elsif ($cmd->{start_count}) {
-			$hdl->push_write("$name fail $cmd->{start_count}\n");
+		elsif ($svc->{start_count}) {
+			$hdl->push_write("$name fail $svc->{start_count}\n");
 		}
 		else {
 			$hdl->push_write("$name down\n");
@@ -381,10 +432,9 @@ sub _logger {
 sub _log_format {
 	my ($self, $ts, $ctx, $lvl, $msg) = @_;
 	
-	my $ts_fmt = "%Y-%m-%dT%H:%M:%S%z";
+	my $ts_fmt =  $self->{conf}->{log}->{ts_format} || "%Y-%m-%dT%H:%M:%S%z";
 	my @levels = qw(0 fatal alert crit error warn note info debug trace);
-	require POSIX;
-	$ts = POSIX::strftime($ts_fmt, gmtime((int $ts)[0]));
+	$ts = strftime($ts_fmt, localtime((int $ts)[0]));
 	
 	return "$ts $levels[$lvl] [$$] $msg\n"
 }
@@ -404,8 +454,6 @@ __END__
             cmd => 'plackup -p 3011 ./sites/y/app.psgi'
             start_delay => 1,
             start_retries => 5,
-            stop_signal => 'TERM',
-            reload_signal => 'HUP',
             umask => 0027,
             user => 'www',
             group => 'www'
@@ -415,7 +463,7 @@ __END__
           listen => '127.0.0.1:9999',
           daemon => 0,
           umask => 077
-        }
+        },
     );
     $sv->run;
 
