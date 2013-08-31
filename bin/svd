@@ -59,7 +59,7 @@ __END__
       y:
         cmd: 'plackup -p 3011 ./sites/y/app.psgi'
         reload_signal: HUP
-        start_delay: 1
+        restart_delay: 1
         start_retries: 5
         stop_signal: TERM
         umask: 027
