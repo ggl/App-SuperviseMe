@@ -58,10 +58,8 @@ __END__
       x: 'plackup -p 3010 ./sites/x/app.psgi'
       y:
         cmd: 'plackup -p 3011 ./sites/y/app.psgi'
-        reload_signal: HUP
-        restart_delay: 1
         start_retries: 5
-        stop_signal: TERM
+        restart_delay: 1
         umask: 027
         user: www
         group: www

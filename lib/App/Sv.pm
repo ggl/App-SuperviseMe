@@ -36,13 +36,16 @@ sub new {
 	
 	# set default options
 	my $defaults = {
+		start_retries => 8,
 		restart_delay => 1,
-		start_retries => 10,
+		start_wait => 1,
+		stop_wait => 2
 	};
 	foreach my $svc (keys %$run) {
 		$run->{$svc} = { cmd => $run->{$svc} } 
 			if (ref($run->{$svc}) ne 'HASH');
 		croak "Missing command for \'$svc\'" unless $run->{$svc}->{cmd};
+		$run->{$svc}->{name} = $svc;
 		foreach my $opt (keys %$defaults) { 
 			$run->{$svc}->{$opt} = $defaults->{$opt}
 				unless defined $run->{$svc}->{$opt};
@@ -105,7 +108,7 @@ sub _start_svc {
 		umask oct($svc->{umask});
 	}
 	
-	$debug->("Starting '$svc->{cmd}' attempt $svc->{start_count}");
+	$debug->("Starting '$svc->{name}' attempt $svc->{start_count}");
 	my $pid = fork();
 	if (!defined $pid) {
 		$debug->("fork() failed: $!");
@@ -131,11 +134,15 @@ sub _start_svc {
 	}
 
 	# parent
-	$debug->("Watching pid $pid for '$svc->{cmd}'");
+	$debug->("Watching pid $pid for '$svc->{name}'");
 	$svc->{pid} = $pid;
 	$svc->{watcher} = AE::child $pid, sub { $self->_child_exited($svc, @_) };
 	$svc->{start_ts} = time;
 	umask $oldmask if $oldmask;
+	my $t; $t = AE::timer $svc->{start_wait}, 0, sub {
+		$self->_check_svc_up($svc);
+		undef $t;
+	};
 	
 	return $pid;
 }
@@ -144,13 +151,17 @@ sub _child_exited {
 	my ($self, $svc, undef, $status) = @_;
 	
 	my $debug = $self->{log}->logger(8);
-	$debug->("Child $svc->{pid} exited, status $status: '$svc->{cmd}'");
+	$debug->("Child $svc->{pid} exited, status $status: '$svc->{name}'");
 	delete $svc->{watcher};
 	delete $svc->{pid};
-	delete $svc->{start_count}
-		if (time - $svc->{start_ts} > $svc->{restart_delay});
-	$svc->{last_status} = $status >> 8;
-	$self->_restart_svc($svc) unless $svc->{once};
+	$svc->{last_status} = $status >> 8; 
+	if ($svc->{once} or $svc->{state} eq 'stop') {
+		delete $svc->{start_count};
+		$svc->{state} = 'down';
+	}
+	else {
+		$self->_restart_svc($svc);
+	}
 }
 
 sub _restart_svc {
@@ -163,23 +174,45 @@ sub _restart_svc {
 	}
 	my $debug = $self->{log}->logger(8);
 	$svc->{state} = 'restart';
-	$debug->("Restarting '$svc->{cmd}' in $svc->{restart_delay} seconds");
+	$debug->("Restarting '$svc->{name}' in $svc->{restart_delay} seconds");
 	my $t; $t = AE::timer $svc->{restart_delay}, 0, sub {
 		$self->_start_svc($svc);
 		undef $t;
 	};
 }
 
+sub _check_svc_up {
+	my ($self, $svc) = @_;
+	
+	return unless $svc->{state} eq 'start';
+	if (!$svc->{pid}) {
+		$svc->{state} = 'fail';
+		return;
+	}
+	delete $svc->{start_count};
+	$svc->{state} = 'up';
+}
+
 sub _stop_svc {
 	my ($self, $svc) = @_;
 	
-	my $debug = $self->{log}->logger(8);
-	$debug->("Sent TERM signal to pid $svc->{pid}");
 	$svc->{state} = 'stop';
-	my $st = kill('TERM', $svc->{pid});
-	map { delete $svc->{$_} } (qw(watcher pid start_count)) if $st;
+	my $st = $self->_signal_svc($svc, 'TERM');
+	my $t; $t = AE::timer $svc->{stop_wait}, 0, sub {
+		$self->_check_svc_down($svc);
+		undef $t;
+	};
 	
 	return $st;
+}
+
+sub _check_svc_down {
+	my ($self, $svc) = @_;
+	
+	return unless $svc->{state} eq 'stop';
+	if ($svc->{pid}) {
+		my $st = $self->_signal_svc($svc, 'KILL');
+	}
 }
 
 sub _signal_svc {
@@ -194,17 +227,17 @@ sub _signal_svc {
 }
 
 sub _signal_all_svc {
-	my ($self, $signal, $cv) = @_;
+	my ($self, $sig, $cv) = @_;
 	
 	my $debug = $self->{log}->logger(8);
-	$debug->("Received signal $signal");
+	$debug->("Received signal $sig");
 	my $is_any_alive = 0;
 	foreach my $key (keys %{ $self->{run} }) {
 		my $svc = $self->{run}->{$key};
 		next unless my $pid = $svc->{pid};
-		$debug->("... sent signal $signal to pid $pid");
+		$debug->("... sent signal $sig to pid $pid");
 		$is_any_alive++;
-		kill($signal, $pid);
+		kill($sig, $pid);
 	}
 
 	return if $cv and $is_any_alive;
@@ -246,9 +279,7 @@ sub _client_conn {
 		on_timeout => sub { $self->_client_error($hdl, undef, 'Timeout') },
 		on_error => sub { $self->_client_error($hdl, undef, $!) }
 	);
-	
 	$self->{conn}->{fileno($fh)} = $hdl;
-	#$self->_status($hdl);
 	
 	return $fh;
 }
@@ -366,8 +397,8 @@ sub _client_cmds {
 			if ($_[0]->{pid} && $_[0]->{start_ts}) {
 				return([
 					$_[0]->{state},
-					time - $_[0]->{start_ts},
-					$_[0]->{pid}
+					$_[0]->{pid},
+					time - $_[0]->{start_ts}
 				]);
 			}
 			elsif ($_[0]->{start_count}) {
@@ -394,7 +425,7 @@ sub _status {
 		my $svc = $self->{run}->{$key};
 		if ($svc->{pid} && $svc->{start_ts}) {
 			my $uptime = time - $svc->{start_ts};
-			$hdl->push_write("$key $svc->{state} $uptime $svc->{pid}\n");
+			$hdl->push_write("$key $svc->{state} $svc->{pid} $uptime\n");
 		}
 		elsif ($svc->{start_count}) {
 			$hdl->push_write("$key $svc->{state} $svc->{start_count}\n");
@@ -464,8 +495,10 @@ __END__
           x => 'plackup -p 3010 ./sites/x/app.psgi',
           y => {
             cmd => 'plackup -p 3011 ./sites/y/app.psgi'
-            restart_delay => 1,
             start_retries => 5,
+            restart_delay => 1,
+            start_wait => 1,
+            stop_wait => 2,
             umask => '027',
             user => 'www',
             group => 'www'
@@ -520,17 +553,27 @@ command should be a scalar. This can also be passed as C<run-E<gt>{$name}> if
 no other options are specified. In this case the supervisor will use the
 default values.
 
-=item run->{$name}->{restart_delay}
-
-Delay command execution by C<restart_delay> seconds. The default is 1 second.
-
 =item run->{$name}->{start_retries}
 
 Specifies the number of execution attempts. For every command execution that
 fails within C<restart_delay>, a counter is incremented until it reaches this
 value when no further execute attempts are made and the command is marked as 
 I<fail>. Otherwise the counter is reset. The default value for this option is
-10 start attempts.
+8 start attempts.
+
+=item run->{$name}->{restart_delay}
+
+Delay service restart by C<restart_delay> seconds. The default is 1 second.
+
+=item run->{$name}->{start_wait}
+
+Number of seconds to wait before checking if the service is up and running and
+updating its state accordingly. The default is 1 second.
+
+=item run->{$name}->{stop_wait}
+
+Number of seconds to wait before checking if the service has stopped and send
+it SIGKILL if it hasn't. The default is 2 seconds.
 
 =item run->{$name}->{umask}
 

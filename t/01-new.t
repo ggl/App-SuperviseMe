@@ -20,8 +20,11 @@ subtest 'basic constructor' => sub {
 		{
 			a => {
 				cmd => 'a',
+				name => 'a',
+				start_retries => 8,
 				restart_delay => 1,
-				start_retries => 10,
+				start_wait => 1,
+				stop_wait => 2
 			}
 		},
 		'... with the expected command list'
@@ -36,13 +39,19 @@ subtest 'basic constructor' => sub {
 		{
 			a => {
 				cmd => 'a',
+				name => 'a',
+				start_retries => 8,
 				restart_delay => 1,
-				start_retries => 10,
+				start_wait => 1,
+				stop_wait => 2
 			},
 			b => {
 				cmd => 'b',
+				name => 'b',
+				start_retries => 8,
 				restart_delay => 1,
-				start_retries => 10,
+				start_wait => 1,
+				stop_wait => 2
 			}
 		},
 		'... with the expected command list'
