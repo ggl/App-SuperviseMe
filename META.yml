@@ -19,4 +19,4 @@ name: App-Sv
 requires:
   AnyEvent: 0
   YAML::Tiny: 0
-version: 0.004
+version: 0.005

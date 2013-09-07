@@ -5,9 +5,9 @@ META.yml
 Makefile.PL
 README
 README.pod
+TODO
 bin/svc
 bin/svd
 dist.ini
 lib/App/Sv.pm
-lib/App/Sv.pm.devel
 t/01-new.t
