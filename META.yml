@@ -1,0 +1,22 @@
+---
+abstract: 'Simple process supervisor'
+author:
+  - 'Pedro Melo <melo@simplicidade.org>'
+  - 'Gelu Lupas <gelu@devnull.ro>'
+build_requires:
+  Test::Deep: 0
+  Test::Fatal: 0
+  Test::More: 0.98
+configure_requires:
+  ExtUtils::MakeMaker: 6.30
+dynamic_config: 0
+generated_by: 'Dist::Zilla version 4.300035, CPAN::Meta::Converter version 2.120921'
+license: artistic_2
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: App-Sv
+requires:
+  AnyEvent: 0
+  YAML::Tiny: 0
+version: 0.004
