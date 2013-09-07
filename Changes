@@ -1,6 +1,22 @@
 Revision history for App-Sv
  
-{{$NEXT}}
+0.005     2013-09-07T08:53:50Z
+  * New command system
+  * Removed stop_signal and restart_signal run options
+  * Added stop_wait and start_wait run options
+  * Socket rewritten using AnyEvent::Handle
+  * Logging system using AnyEvent::Log
+  * Added process controller script (svc)
+  * Updated tests and documentation
+  * AnyEvent requirement bumped to 7.0
+
+0.004     2013-08-06T08:01:49Z
+  * Added a socket for supervised process control
+  * Added a command system for process control
+  * Added server script (svd)
+  * Added per service options
+  * Use YAML::Tiny for configuration
+  * Updated tests and documentation
 
 0.003     2013-01-25T12:26:02Z
   * Add double Ctrl-C to exit supervisor feature
