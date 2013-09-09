@@ -10,7 +10,7 @@ use Getopt::Std;
 use YAML::Tiny;
 use App::Sv;
 
-# ABSTRACT: supervises a list of commands
+# ABSTRACT: Supervisor daemon for App::Sv 
 # VERSION
 # AUTHORITY
 

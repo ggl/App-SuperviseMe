@@ -68,9 +68,5 @@
       }
    },
    "version" : "0.006",
-   "x_authority" : "cpan:GVL",
-   "x_contributors" : [
-      "Gelu Lupas <gelu@jinx>",
-      "Gelu Lupas <gelu@devull.ro>"
-   ]
+   "x_authority" : "cpan:GVL"
 }
