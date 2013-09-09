@@ -1,4 +1,6 @@
 {{$NEXT}}
+ * Updated documentation
+ * Switched build to Minilla
  
 0.005     2013-09-07T08:53:50Z
   * New command system

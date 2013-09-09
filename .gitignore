@@ -3,5 +3,10 @@
 .build
 .prove
 .fslckout
+Build.PL
+TODO
+cpanfile
+dist.ini
+minil.toml
 !META.json
 !META.yml
