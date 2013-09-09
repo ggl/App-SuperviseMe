@@ -1,4 +1,7 @@
-/App-SuperviseMe-*
+/App-Sv-*
+.*
 .build
 .prove
 .fslckout
+!META.json
+!META.yml

@@ -12,7 +12,7 @@ use AnyEvent::Handle;
 use Getopt::Std;
 use YAML::Tiny;
 
-# ABSTRACT: controls supervised commands
+# ABSTRACT: Service controller for App::Sv
 # VERSION
 # AUTHORITY
 
@@ -119,6 +119,10 @@ __END__
 
 =encoding utf8
 
+=head1 NAME
+
+svc - Service controller for App::Sv
+
 =head1 SYNOPSIS
 
     # Make sure you export SV_HOME or SV_CONFIG
@@ -142,7 +146,7 @@ __END__
     
 =head1 DESCRIPTION
 
-The C<svc> command is a simple client for the supervisor server.
+The C<svc> command is a service controller for App::Sv.
 
 It connects to the server's socket, issues the commands supplied as its
 arguments and displays the server's response.

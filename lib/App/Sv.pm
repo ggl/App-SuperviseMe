@@ -1,18 +1,18 @@
 package App::Sv;
 
-# ABSTRACT: Simple process supervisor
+# ABSTRACT: Event-based multi-process supervisor
 # VERSION
 # AUTHORITY
 
 use strict;
 use warnings;
+use version; our $VERSION = version->parse('0.006');
 use Carp 'croak';
 use POSIX 'strftime';
 use AnyEvent;
 use AnyEvent::Socket;
 use AnyEvent::Handle;
 use AnyEvent::Log;
-
 
 # Constructors
 sub new {
@@ -487,6 +487,10 @@ sub _log_format {
 __END__
 
 =encoding utf8
+
+=head1 NAME
+
+App::Sv - Event-based multi-process supervisor
 
 =head1 SYNOPSIS
 
