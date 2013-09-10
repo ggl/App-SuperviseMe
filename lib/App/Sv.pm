@@ -525,7 +525,7 @@ their execution. If one of the programs dies, the supervisor will restart it
 after C<restart_delay> seconds. If a program respawns during C<restart_delay>
 for C<start_retries> times, the supervisor gives up and stops it indefinitely.
 
-You can send SIGTERM to the supervisor process to kill all childs and exit.
+You can send SIGTERM to the supervisor process to kill all children and exit.
 
 You can also send SIGINT (Ctrl-C on your terminal) to restart the processes. If
 a second SIGINT is received and no child process is currently running, the
@@ -561,13 +561,13 @@ default values.
 
 Specifies the number of execution attempts. For every command execution that
 fails within C<restart_delay>, a counter is incremented until it reaches this
-value when no further execute attempts are made and the command is marked as 
+value when no further execution attempts are made and the command is marked as 
 I<fail>. Otherwise the counter is reset. The default value for this option is
 8 start attempts.
 
 =item run->{$name}->{restart_delay}
 
-Delay service restart by C<restart_delay> seconds. The default is 1 second.
+Delay service restart by this many seconds. The default is 1 second.
 
 =item run->{$name}->{start_wait}
 
@@ -576,8 +576,8 @@ updating its state accordingly. The default is 1 second.
 
 =item run->{$name}->{stop_wait}
 
-Number of seconds to wait before checking if the service has stopped and send
-it SIGKILL if it hasn't. The default is 2 seconds.
+Number of seconds to wait before checking if the service has stopped and
+sending it SIGKILL if it hasn't. The default is 2 seconds.
 
 =item run->{$name}->{umask}
 
@@ -616,13 +616,14 @@ A hash reference with the logging options.
 
 Enables logging at the given level and all lower (higher priority) levels. This
 should be an integer between 1 (fatal) and 9 (trace). For the actual names, see
-L<AnyEvent::Log>. If C<SV_DEBUG> is set this defaults to 8 (debug), otherwise
+L<AnyEvent::Log>. If C<SV_DEBUG> is set, this defaults to 8 (debug), otherwise
 it defaults to 5 (warn).
 
 =item log->{file}
 
 If this option is set, all the log messages are appended to this file. By
-default messages go to STDOUT or STDERR.
+default messages go to STDOUT or STDERR, whichever is open. By default logging
+goes to STDOUT.
 
 =item log->{ts_format}
 
@@ -635,7 +636,8 @@ The default format is "%Y-%m-%dT%H:%M:%S%z".
 
     $sv->run;
 
-Starts the supervisor, start all the child processes and monitors each one.
+Starts the supervisor, forks and executes all the services in child processes
+and monitors each one.
 
 This method returns when the supervisor is stopped with either a SIGINT or a
 SIGTERM.
@@ -646,7 +648,7 @@ SIGTERM.
 
 =item SV_DEBUG 
 
-If set to a true value, the supervisor will show debug information.
+If set to a true value, the supervisor will show debugging information.
 
 =back
 

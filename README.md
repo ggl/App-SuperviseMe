@@ -36,7 +36,7 @@ their execution. If one of the programs dies, the supervisor will restart it
 after `restart_delay` seconds. If a program respawns during `restart_delay`
 for `start_retries` times, the supervisor gives up and stops it indefinitely.
 
-You can send SIGTERM to the supervisor process to kill all childs and exit.
+You can send SIGTERM to the supervisor process to kill all children and exit.
 
 You can also send SIGINT (Ctrl-C on your terminal) to restart the processes. If
 a second SIGINT is received and no child process is currently running, the
@@ -71,13 +71,13 @@ It accepts an anonymous hash with the following options:
 
     Specifies the number of execution attempts. For every command execution that
     fails within `restart_delay`, a counter is incremented until it reaches this
-    value when no further execute attempts are made and the command is marked as 
+    value when no further execution attempts are made and the command is marked as 
     _fail_. Otherwise the counter is reset. The default value for this option is
     8 start attempts.
 
 - run->{$name}->{restart\_delay}
 
-    Delay service restart by `restart_delay` seconds. The default is 1 second.
+    Delay service restart by this many seconds. The default is 1 second.
 
 - run->{$name}->{start\_wait}
 
@@ -86,8 +86,8 @@ It accepts an anonymous hash with the following options:
 
 - run->{$name}->{stop\_wait}
 
-    Number of seconds to wait before checking if the service has stopped and send
-    it SIGKILL if it hasn't. The default is 2 seconds.
+    Number of seconds to wait before checking if the service has stopped and
+    sending it SIGKILL if it hasn't. The default is 2 seconds.
 
 - run->{$name}->{umask}
 
@@ -126,13 +126,14 @@ It accepts an anonymous hash with the following options:
 
     Enables logging at the given level and all lower (higher priority) levels. This
     should be an integer between 1 (fatal) and 9 (trace). For the actual names, see
-    [AnyEvent::Log](http://search.cpan.org/perldoc?AnyEvent::Log). If `SV_DEBUG` is set this defaults to 8 (debug), otherwise
+    [AnyEvent::Log](http://search.cpan.org/perldoc?AnyEvent::Log). If `SV_DEBUG` is set, this defaults to 8 (debug), otherwise
     it defaults to 5 (warn).
 
 - log->{file}
 
     If this option is set, all the log messages are appended to this file. By
-    default messages go to STDOUT or STDERR.
+    default messages go to STDOUT or STDERR, whichever is open. By default logging
+    goes to STDOUT.
 
 - log->{ts\_format}
 
@@ -143,7 +144,8 @@ It accepts an anonymous hash with the following options:
 
     $sv->run;
 
-Starts the supervisor, start all the child processes and monitors each one.
+Starts the supervisor, forks and executes all the services in child processes
+and monitors each one.
 
 This method returns when the supervisor is stopped with either a SIGINT or a
 SIGTERM.
@@ -152,7 +154,7 @@ SIGTERM.
 
 - SV\_DEBUG 
 
-    If set to a true value, the supervisor will show debug information.
+    If set to a true value, the supervisor will show debugging information.
 
 # SEE ALSO
 
