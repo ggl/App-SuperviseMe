@@ -1,8 +1,9 @@
 {{$NEXT}}
- * Updated documentation
- * Switched build to Minilla
+  * Updated documentation
+  * Switched build to Minilla
+  * Fixed x-contributors
  
-0.005     2013-09-07T08:53:50Z
+0.005 2013-09-07T08:53:50Z
   * New command system
   * Removed stop_signal and restart_signal run options
   * Added stop_wait and start_wait run options
@@ -11,7 +12,7 @@
   * Added process controller script (svc)
   * Updated tests and documentation
 
-0.004     2013-08-06T08:01:49Z
+0.004 2013-08-06T08:01:49Z
   * Added a socket for supervised process control
   * Added a command system for process control
   * Added server script (svd)
@@ -19,11 +20,11 @@
   * Use YAML::Tiny for configuration
   * Updated tests and documentation
 
-0.003     2013-01-25T12:26:02Z
+0.003 2013-01-25T12:26:02Z
   * Add double Ctrl-C to exit supervisor feature
 
-0.002     2013-01-25T12:05:43Z
+0.002 2013-01-25T12:05:43Z
   * Add support for commands as list references
 
-0.001     2011-05-25 18:13:00 Europe/Lisbon
+0.001 2011-05-25 18:13:00 Europe/Lisbon
   * Initial release

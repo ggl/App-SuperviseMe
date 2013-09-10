@@ -9,4 +9,3 @@ cpanfile
 dist.ini
 minil.toml
 !META.json
-!META.yml
