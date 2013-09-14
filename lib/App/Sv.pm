@@ -6,7 +6,9 @@ package App::Sv;
 
 use strict;
 use warnings;
-use version; our $VERSION = version->parse('0.006');
+use 5.008001;
+use version; our $VERSION = version->parse('0.007');
+
 use Carp 'croak';
 use POSIX 'strftime';
 use AnyEvent;

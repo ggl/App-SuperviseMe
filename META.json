@@ -53,7 +53,7 @@
             "EV" : "0"
          },
          "requires" : {
-            "AnyEvent" : "0",
+            "AnyEvent" : "6.01",
             "Carp" : "0",
             "POSIX" : "0",
             "YAML::Tiny" : "0",
@@ -74,6 +74,6 @@
          "web" : "https://github.com/ggl/App-Sv"
       }
    },
-   "version" : "0.006",
+   "version" : "0.007",
    "x_authority" : "cpan:GVL"
 }

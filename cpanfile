@@ -1,9 +1,9 @@
-requires 'perl' => '5.008001';
+requires 'perl', '5.008001';
 requires 'strict';
 requires 'warnings';
 requires 'Carp';
 requires 'POSIX';
-requires 'AnyEvent';
+requires 'AnyEvent', '6.01';
 requires 'YAML::Tiny';
 
 recommends 'EV';

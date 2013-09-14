@@ -1,7 +1,12 @@
 {{$NEXT}}
-  * Updated documentation
-  * Switched build to Minilla
+  * Required minimum perl version
+  * Bumped AnyEvent requirement to 6.01
   * Fixed x-contributors
+  * Other housekeeping changes
+
+0.006 2013-09-09T19:08:58Z
+ * Updated documentation
+ * Switched build to Minilla
  
 0.005 2013-09-07T08:53:50Z
   * New command system
