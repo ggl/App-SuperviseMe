@@ -7,7 +7,7 @@ package App::Sv;
 use strict;
 use warnings;
 use 5.008001;
-use version; our $VERSION = version->parse('0.007');
+use version; our $VERSION = version->parse('0.008');
 
 use Carp 'croak';
 use POSIX 'strftime';
@@ -33,24 +33,35 @@ sub new {
 	
 	my $run = $conf->{run};
 	$conf->{global}->{log} = delete $conf->{log};
-	croak "Commands must be passed as a HASH ref" unless ref($run) eq 'HASH';
-	croak "Missing command list" unless scalar (keys %$run) > 0;
+	croak "Commands must be passed as a HASH ref" if ref $run ne 'HASH';
+	croak "Missing command list" unless scalar (keys %$run);
 	
-	# set default options
+	# set defaults
 	my $defaults = {
 		start_retries => 8,
 		restart_delay => 1,
 		start_wait => 1,
-		stop_wait => 2
+		stop_wait => 0
 	};
+	# check options
 	foreach my $svc (keys %$run) {
-		$run->{$svc} = { cmd => $run->{$svc} } 
-			if (ref($run->{$svc}) ne 'HASH');
-		croak "Missing command for \'$svc\'" unless $run->{$svc}->{cmd};
+		unless ($run->{$svc}) {
+			croak "Missing command for \'$svc\'";
+		}
+		elsif (ref $run->{$svc} ne 'HASH') {
+			$run->{$svc} = { cmd => $run->{$svc} };
+		}
+		elsif (!$run->{$svc}->{cmd}) {
+			croak "Missing command for \'$svc\'";
+		}
 		$run->{$svc}->{name} = $svc;
-		foreach my $opt (keys %$defaults) { 
-			$run->{$svc}->{$opt} = $defaults->{$opt}
-				unless defined $run->{$svc}->{$opt};
+		foreach my $opt (keys %$defaults) {
+			unless (defined $run->{$svc}->{$opt}) {
+				$run->{$svc}->{$opt} = $defaults->{$opt};
+			}
+			elsif ($opt =~ /delay|wait/ && $run->{$svc}->{$opt} <= 0) {
+				$run->{$svc}->{$opt} = $defaults->{$opt};
+			}
 		}
 	}
 	
@@ -157,9 +168,13 @@ sub _child_exited {
 	delete $svc->{watcher};
 	delete $svc->{pid};
 	$svc->{last_status} = $status >> 8; 
-	if ($svc->{once} or $svc->{state} eq 'stop') {
+	if ($svc->{state} eq 'stop') {
 		delete $svc->{start_count};
 		$svc->{state} = 'down';
+	}
+	elsif ($svc->{once}) {
+		delete $svc->{start_count};
+		$svc->{state} = 'fatal';
 	}
 	else {
 		$self->_restart_svc($svc);
@@ -169,8 +184,14 @@ sub _child_exited {
 sub _restart_svc {
 	my ($self, $svc) = @_;
 
-	if ($svc->{start_retries} && $svc->{start_count} && 
-		($svc->{start_count} >= $svc->{start_retries})) {
+	if ($svc->{start_retries}) {
+		if ($svc->{start_count} &&
+			($svc->{start_count} >= $svc->{start_retries})) {
+			$svc->{state} = 'fatal';
+			return;
+		}
+	}
+	else {
 		$svc->{state} = 'fatal';
 		return;
 	}
@@ -200,10 +221,12 @@ sub _stop_svc {
 	
 	$svc->{state} = 'stop';
 	my $st = $self->_signal_svc($svc, 'TERM');
-	my $t; $t = AE::timer $svc->{stop_wait}, 0, sub {
-		$self->_check_svc_down($svc);
-		undef $t;
-	};
+	if ($svc->{stop_wait} && $svc->{stop_wait} > 0) {
+		my $t; $t = AE::timer $svc->{stop_wait}, 0, sub {
+			$self->_check_svc_down($svc);
+			undef $t;
+		};
+	}
 	
 	return $st;
 }
@@ -422,19 +445,11 @@ sub _client_cmds {
 sub _status {
 	my ($self, $hdl) = @_;
 	
-	return unless $hdl;
+	return unless ($hdl && ref $self->{cmds}->{status} eq 'CODE');
 	foreach my $key (keys %{ $self->{run} }) {
-		my $svc = $self->{run}->{$key};
-		if ($svc->{pid} && $svc->{start_ts}) {
-			my $uptime = time - $svc->{start_ts};
-			$hdl->push_write("$key $svc->{state} $svc->{pid} $uptime\n");
-		}
-		elsif ($svc->{start_count}) {
-			$hdl->push_write("$key $svc->{state} $svc->{start_count}\n");
-		}
-		else {
-			$hdl->push_write("$key $svc->{state}\n");
-		}
+		my $st = $self->{cmds}->{status}->($self->{run}->{$key});
+		$st = ref $st eq 'ARRAY' ? join(' ', @$st) : $st;
+		$hdl->push_write("$key $st\n");
 	}
 }
 
@@ -563,23 +578,27 @@ default values.
 
 Specifies the number of execution attempts. For every command execution that
 fails within C<restart_delay>, a counter is incremented until it reaches this
-value when no further execution attempts are made and the command is marked as 
-I<fail>. Otherwise the counter is reset. The default value for this option is
-8 start attempts.
+value when no further execution attempts are made and the service is marked as 
+I<fatal>. Otherwise the counter is reset. A null value disables restart; for 
+negative values restart is attempted indefinitely. The default value for this
+option is 8 start attempts.
 
 =item run->{$name}->{restart_delay}
 
-Delay service restart by this many seconds. The default is 1 second.
+Delay service restart by this many seconds. The default is 1 second. For null
+and negative values, the default is used.
 
 =item run->{$name}->{start_wait}
 
 Number of seconds to wait before checking if the service is up and running and
-updating its state accordingly. The default is 1 second.
+updating its state accordingly. The default is 1 second. For null and negative
+values, the default is used.
 
 =item run->{$name}->{stop_wait}
 
 Number of seconds to wait before checking if the service has stopped and
-sending it SIGKILL if it hasn't. The default is 2 seconds.
+sending it SIGKILL if it hasn't. The default is 0, meaning forced service
+shutdown is disabled. For null and negative values, the default is used.
 
 =item run->{$name}->{umask}
 

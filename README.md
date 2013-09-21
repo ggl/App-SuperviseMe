@@ -71,23 +71,27 @@ It accepts an anonymous hash with the following options:
 
     Specifies the number of execution attempts. For every command execution that
     fails within `restart_delay`, a counter is incremented until it reaches this
-    value when no further execution attempts are made and the command is marked as 
-    _fail_. Otherwise the counter is reset. The default value for this option is
-    8 start attempts.
+    value when no further execution attempts are made and the service is marked as 
+    _fatal_. Otherwise the counter is reset. A null value disables restart; for 
+    negative values restart is attempted indefinitely. The default value for this
+    option is 8 start attempts.
 
 - run->{$name}->{restart\_delay}
 
-    Delay service restart by this many seconds. The default is 1 second.
+    Delay service restart by this many seconds. The default is 1 second. For null
+    and negative values, the default is used.
 
 - run->{$name}->{start\_wait}
 
     Number of seconds to wait before checking if the service is up and running and
-    updating its state accordingly. The default is 1 second.
+    updating its state accordingly. The default is 1 second. For null and negative
+    values, the default is used.
 
 - run->{$name}->{stop\_wait}
 
     Number of seconds to wait before checking if the service has stopped and
-    sending it SIGKILL if it hasn't. The default is 2 seconds.
+    sending it SIGKILL if it hasn't. The default is 0, meaning forced service
+    shutdown is disabled. For null and negative values, the default is used.
 
 - run->{$name}->{umask}
 

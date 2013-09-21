@@ -1,4 +1,15 @@
+Revision history for Perl module App::Sv
+
 {{$NEXT}}
+  * _status() now calls $self->{cmds}->{status}->()
+  * Fixed start_retries behaviour when <= 0
+  * Forced > 0 on *_delay and *_wait params
+  * Changed stop_wait default to 0
+  * More checks on run params
+  * Properly mark failed services started with once
+  * Document changes
+  
+0.007 2013-09-11T05:39:28Z
   * Required minimum perl version
   * Bumped AnyEvent requirement to 6.01
   * Fixed x-contributors
