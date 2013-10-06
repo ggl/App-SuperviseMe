@@ -1,6 +1,13 @@
 Revision history for Perl module App::Sv
 
 {{$NEXT}}
+  * Added experimental run->{env} option
+  * Added functions to save/resore %ENV into App::Sv::Util
+  * Moved logger to App::Sv::Log
+  * Use version global to avoid depending on version
+  * Fixed license in META.json
+
+0.008 2013-09-21T08:45:52Z
   * _status() now calls $self->{cmds}->{status}->()
   * Fixed start_retries behaviour when <= 0
   * Forced > 0 on *_delay and *_wait params

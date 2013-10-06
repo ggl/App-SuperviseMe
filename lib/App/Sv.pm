@@ -1,22 +1,19 @@
 package App::Sv;
-
 # ABSTRACT: Event-based multi-process supervisor
-# VERSION
-# AUTHORITY
+our $VERSION = '0.009';
 
+use 5.008001;
 use strict;
 use warnings;
-use 5.008001;
-use version; our $VERSION = version->parse('0.008');
 
 use Carp 'croak';
-use POSIX 'strftime';
 use AnyEvent;
 use AnyEvent::Socket;
 use AnyEvent::Handle;
-use AnyEvent::Log;
+use App::Sv::Log;
+use App::Sv::Util;
 
-# Constructors
+# Constructor
 sub new {
 	my $class = shift;
 	my $conf;
@@ -88,7 +85,7 @@ sub run {
 	# set global umask
 	umask oct($self->{conf}->{umask}) if $self->{conf}->{umask};
 	# initialize logger
-	$self->_logger();
+	$self->{log} = Sv::Log->new($self->{conf}->{log});
 	# open controling socket; load commands
 	$self->_listener() if $self->{conf}->{listen};
 	$self->{cmds} = $self->_client_cmds() if ref $self->{server} eq 'Guard';
@@ -119,6 +116,14 @@ sub _start_svc {
 	if ($svc->{umask}) {
 		$oldmask = umask;
 		umask oct($svc->{umask});
+	}
+	# set custom env
+	my $svu;
+	my $oldenv;
+	if ($svc->{env}) {
+		$svu = Sv::Util->new();
+		$oldenv = $svu->get_env();
+		$svu->set_env($svc->{env});
 	}
 	
 	$debug->("Starting '$svc->{name}' attempt $svc->{start_count}");
@@ -152,6 +157,7 @@ sub _start_svc {
 	$svc->{watcher} = AE::child $pid, sub { $self->_child_exited($svc, @_) };
 	$svc->{start_ts} = time;
 	umask $oldmask if $oldmask;
+	$svu->set_env($oldenv) if ($svu && $oldenv);
 	my $t; $t = AE::timer $svc->{start_wait}, 0, sub {
 		$self->_check_svc_up($svc);
 		undef $t;
@@ -453,52 +459,6 @@ sub _status {
 	}
 }
 
-# Loggers
-
-sub _logger {
-	my $self = shift;
-	
-	my $log = $self->{conf}->{log};
-	my $ctx; $ctx = AnyEvent::Log::Ctx->new(
-		title => __PACKAGE__,
-		fmt_cb => sub { $self->_log_format(@_) }
-	);
-	
-	# set output
-	if ($log->{file}) {
-		$ctx->log_to_file($log->{file});
-	}
-	elsif (-t \*STDOUT && -t \*STDIN) {
-		$ctx->log_cb(sub { print @_ });
-	}
-	elsif (-t \*STDERR) {
-		$ctx->log_cb(sub { print STDERR @_ });
-	}
-	
-	# set log level
-	if ($ENV{SV_DEBUG}) {
-		$ctx->level(8);
-	}
-	elsif ($log->{level}) {
-		$ctx->level($log->{level});
-	}
-	else {
-		$ctx->level(5);
-	}
-	
-	$self->{log} = $ctx;
-}
-
-sub _log_format {
-	my ($self, $ts, $ctx, $lvl, $msg) = @_;
-	
-	my $ts_fmt =  $self->{conf}->{log}->{ts_format} || "%Y-%m-%dT%H:%M:%S%z";
-	my @levels = qw(0 fatal alert crit error warn note info debug trace);
-	$ts = strftime($ts_fmt, localtime((int $ts)[0]));
-	
-	return "$ts $levels[$lvl] [$$] $msg\n"
-}
-
 1;
 
 __END__
@@ -602,8 +562,14 @@ shutdown is disabled. For null and negative values, the default is used.
 
 =item run->{$name}->{umask}
 
-This option sets the specified umask before executing the command. Its value is
-converted to octal.
+This option sets a custom umask before executing the command. The original 
+umask is restored afterwards. Its value is converted to octal.
+
+=item run->{$name}->{env}
+
+This option sets a custom %ENV before executing the command. The original %ENV
+is restored afterwards. Its value should be a hash reference containing the
+environment variables.
 
 =item run->{$name}->{user}
 

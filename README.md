@@ -95,8 +95,14 @@ It accepts an anonymous hash with the following options:
 
 - run->{$name}->{umask}
 
-    This option sets the specified umask before executing the command. Its value is
-    converted to octal.
+    This option sets a custom umask before executing the command. The original 
+    umask is restored afterwards. Its value is converted to octal.
+
+- run->{$name}->{env}
+
+    This option sets a custom %ENV before executing the command. The original %ENV
+    is restored afterwards. Its value should be a hash reference containing the
+    environment variables.
 
 - run->{$name}->{user}
 
