@@ -31,10 +31,11 @@ App::Sv - Event-based multi-process supervisor
 
 This module implements an event-based multi-process supervisor.
 
-It takes a list of commands to execute and starts each one, and then monitors
-their execution. If one of the programs dies, the supervisor will restart it
-after `restart_delay` seconds. If a program respawns during `restart_delay`
-for `start_retries` times, the supervisor gives up and stops it indefinitely.
+It takes a list of commands to execute, forks a child and starts each one and
+then monitors their execution. If one of the processes dies, the supervisor
+will restart it after `restart_delay` seconds. If a process respawns during
+`restart_delay` for `start_retries` times, the supervisor gives up and stops
+it indefinitely.
 
 You can send SIGTERM to the supervisor process to kill all children and exit.
 
@@ -51,9 +52,8 @@ in a terminal window to terminate the supervisor and all child processes.
 
     my $sv = App::Sv->new({ run => {...}, global => {...}, log => {...} });
 
-Creates a supervisor instance with a list of commands to monitor.
-
-It accepts an anonymous hash with the following options:
+Creates a supervisor instance with a list of commands to monitor. It accepts
+an anonymous hash with the following options:
 
 - run
 
@@ -95,14 +95,13 @@ It accepts an anonymous hash with the following options:
 
 - run->{$name}->{umask}
 
-    This option sets a custom umask before executing the command. The original 
-    umask is restored afterwards. Its value is converted to octal.
+    This option sets a custom umask in the child, before executing the command.
+    Its value is converted to octal.
 
 - run->{$name}->{env}
 
-    This option sets a custom %ENV before executing the command. The original %ENV
-    is restored afterwards. Its value should be a hash reference containing the
-    environment variables.
+    This option sets a custom %ENV in the child, before executing the command.
+    Its value should be a hash reference containing the environment variables.
 
 - run->{$name}->{user}
 

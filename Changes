@@ -1,6 +1,11 @@
 Revision history for Perl module App::Sv
 
 {{$NEXT}}
+  * Moved umask and environment preparation in the child
+  * Fixed a bug where the child would lose the environment if it terminates
+  * As a consequence, App::Sv::Util isn't used anymore
+
+0.009 2013-10-06T09:41:55Z
   * Added experimental run->{env} option
   * Added functions to save/resore %ENV into App::Sv::Util
   * Moved logger to App::Sv::Log

@@ -1,6 +1,6 @@
 package App::Sv;
 # ABSTRACT: Event-based multi-process supervisor
-our $VERSION = '0.009';
+our $VERSION = '0.010';
 
 use 5.008001;
 use strict;
@@ -11,7 +11,6 @@ use AnyEvent;
 use AnyEvent::Socket;
 use AnyEvent::Handle;
 use App::Sv::Log;
-use App::Sv::Util;
 
 # Constructor
 sub new {
@@ -111,21 +110,6 @@ sub _start_svc {
 		$svc->{start_count} = 1;
 	}
 	
-	# set process umask
-	my $oldmask;
-	if ($svc->{umask}) {
-		$oldmask = umask;
-		umask oct($svc->{umask});
-	}
-	# set custom env
-	my $svu;
-	my $oldenv;
-	if ($svc->{env}) {
-		$svu = Sv::Util->new();
-		$oldenv = $svu->get_env();
-		$svu->set_env($svc->{env});
-	}
-	
 	$debug->("Starting '$svc->{name}' attempt $svc->{start_count}");
 	my $pid = fork();
 	if (!defined $pid) {
@@ -133,9 +117,9 @@ sub _start_svc {
 		$self->_restart_svc($svc);
 		return;
 	}
-
-	# child
+	
 	if ($pid == 0) {
+		# child
 		# set egid/euid
 		if ($svc->{group}) {
 			$svc->{gid} = getgrnam($svc->{group});
@@ -145,23 +129,29 @@ sub _start_svc {
 			$svc->{uid} = getpwnam($svc->{user});
 			$> = $svc->{uid};
 		}
+		# set process umask
+		umask oct($svc->{umask}) if ($svc->{umask});
+		# set environment
+		if ($svc->{env}) {
+			%ENV = %{$svc->{env}};
+		}
+		# start process
 		my $cmd = $svc->{cmd};
 		$debug->("Executing '$cmd'");
 		exec($cmd);
 		exit(1);
 	}
-
-	# parent
-	$debug->("Watching pid $pid for '$svc->{name}'");
-	$svc->{pid} = $pid;
-	$svc->{watcher} = AE::child $pid, sub { $self->_child_exited($svc, @_) };
-	$svc->{start_ts} = time;
-	umask $oldmask if $oldmask;
-	$svu->set_env($oldenv) if ($svu && $oldenv);
-	my $t; $t = AE::timer $svc->{start_wait}, 0, sub {
-		$self->_check_svc_up($svc);
-		undef $t;
-	};
+	else {
+		# parent
+		$debug->("Watching pid $pid for '$svc->{name}'");
+		$svc->{pid} = $pid;
+		$svc->{watcher} = AE::child $pid, sub { $self->_child_exited($svc, @_) };
+		$svc->{start_ts} = time;
+		my $t; $t = AE::timer $svc->{start_wait}, 0, sub {
+			$self->_check_svc_up($svc);
+			undef $t;
+		};
+	}
 	
 	return $pid;
 }
@@ -497,10 +487,11 @@ App::Sv - Event-based multi-process supervisor
 
 This module implements an event-based multi-process supervisor.
 
-It takes a list of commands to execute and starts each one, and then monitors
-their execution. If one of the programs dies, the supervisor will restart it
-after C<restart_delay> seconds. If a program respawns during C<restart_delay>
-for C<start_retries> times, the supervisor gives up and stops it indefinitely.
+It takes a list of commands to execute, forks a child and starts each one and
+then monitors their execution. If one of the processes dies, the supervisor
+will restart it after C<restart_delay> seconds. If a process respawns during
+C<restart_delay> for C<start_retries> times, the supervisor gives up and stops
+it indefinitely.
 
 You can send SIGTERM to the supervisor process to kill all children and exit.
 
@@ -516,9 +507,8 @@ in a terminal window to terminate the supervisor and all child processes.
 
     my $sv = App::Sv->new({ run => {...}, global => {...}, log => {...} });
 
-Creates a supervisor instance with a list of commands to monitor.
-
-It accepts an anonymous hash with the following options:
+Creates a supervisor instance with a list of commands to monitor. It accepts
+an anonymous hash with the following options:
 
 =over 4
 
@@ -562,14 +552,13 @@ shutdown is disabled. For null and negative values, the default is used.
 
 =item run->{$name}->{umask}
 
-This option sets a custom umask before executing the command. The original 
-umask is restored afterwards. Its value is converted to octal.
+This option sets a custom umask in the child, before executing the command.
+Its value is converted to octal.
 
 =item run->{$name}->{env}
 
-This option sets a custom %ENV before executing the command. The original %ENV
-is restored afterwards. Its value should be a hash reference containing the
-environment variables.
+This option sets a custom %ENV in the child, before executing the command.
+Its value should be a hash reference containing the environment variables.
 
 =item run->{$name}->{user}
 
