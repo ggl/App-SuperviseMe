@@ -1,6 +1,6 @@
 package App::Sv;
 # ABSTRACT: Event-based multi-process supervisor
-our $VERSION = '0.010';
+our $VERSION = '0.011';
 
 use 5.008001;
 use strict;
@@ -84,7 +84,7 @@ sub run {
 	# set global umask
 	umask oct($self->{conf}->{umask}) if $self->{conf}->{umask};
 	# initialize logger
-	$self->{log} = Sv::Log->new($self->{conf}->{log});
+	$self->{log} = App::Sv::Log->new($self->{conf}->{log});
 	# open controling socket; load commands
 	$self->_listener() if $self->{conf}->{listen};
 	$self->{cmds} = $self->_client_cmds() if ref $self->{server} eq 'Guard';
@@ -102,6 +102,7 @@ sub _start_svc {
 	my ($self, $svc) = @_;
 	
 	my $debug = $self->{log}->logger(8);
+	my $warn = $self->{log}->logger(5);
 	$svc->{state} = 'start';
 	if ($svc->{start_count}) {
 		$svc->{start_count}++;
@@ -113,7 +114,7 @@ sub _start_svc {
 	$debug->("Starting '$svc->{name}' attempt $svc->{start_count}");
 	my $pid = fork();
 	if (!defined $pid) {
-		$debug->("fork() failed: $!");
+		$warn->("Failed to fork '$svc->{name}': $!");
 		$self->_restart_svc($svc);
 		return;
 	}
@@ -130,11 +131,14 @@ sub _start_svc {
 			$> = $svc->{uid};
 		}
 		# set process umask
-		umask oct($svc->{umask}) if ($svc->{umask});
-		# set environment
-		if ($svc->{env}) {
-			%ENV = %{$svc->{env}};
+		umask oct($svc->{umask}) if $svc->{umask};
+		# change working directory
+		if ($svc->{cwd}) {
+			chdir $svc->{cwd} 
+				or $warn->("Failed cwd for '$svc->{name}': $!");
 		}
+		# set environment
+		%ENV = %{$svc->{env}} if $svc->{env} && ref $svc->{env} eq 'HASH';
 		# start process
 		my $cmd = $svc->{cmd};
 		$debug->("Executing '$cmd'");
@@ -145,7 +149,9 @@ sub _start_svc {
 		# parent
 		$debug->("Watching pid $pid for '$svc->{name}'");
 		$svc->{pid} = $pid;
-		$svc->{watcher} = AE::child $pid, sub { $self->_child_exited($svc, @_) };
+		$svc->{watcher} = AE::child $pid, sub {
+			$self->_child_exited($svc, @_);
+		};
 		$svc->{start_ts} = time;
 		my $t; $t = AE::timer $svc->{start_wait}, 0, sub {
 			$self->_check_svc_up($svc);
@@ -515,14 +521,14 @@ an anonymous hash with the following options:
 =item run
 
 A hash reference with the commands to execute and monitor. Each command can be
-a scalar, or a hash reference.
+a string, or a hash reference.
 
 =item run->{$name}->{cmd}
 
 The command to execute and monitor, along with command line options. Each
-command should be a scalar. This can also be passed as C<run-E<gt>{$name}> if
+command should be a string. This can also be passed as C<run-E<gt>{$name}> if
 no other options are specified. In this case the supervisor will use the
-default values.
+default values for the requred parameters.
 
 =item run->{$name}->{start_retries}
 
@@ -553,7 +559,12 @@ shutdown is disabled. For null and negative values, the default is used.
 =item run->{$name}->{umask}
 
 This option sets a custom umask in the child, before executing the command.
-Its value is converted to octal.
+Its value should be a string containing the octal digits.
+
+=item run->{$name}->{cwd}
+
+This option changes the child's working directory. Its value should be a
+string representing a path.
 
 =item run->{$name}->{env}
 

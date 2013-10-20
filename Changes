@@ -1,6 +1,10 @@
 Revision history for Perl module App::Sv
 
 {{$NEXT}}
+  * Fixed namespaces for modules under App::Sv
+  * Added experimental run->{cwd} option
+
+0.010 2013-10-12T08:04:01Z
   * Moved umask and environment preparation in the child
   * Fixed a bug where the child would lose the environment if it terminates
   * As a consequence, App::Sv::Util isn't used anymore

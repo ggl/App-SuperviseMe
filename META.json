@@ -5,7 +5,7 @@
       "Pedro Melo <melo@simplicidade.org>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Minilla/v0.7.5, CPAN::Meta::Converter version 2.132660",
+   "generated_by" : "Minilla/v0.8.0, CPAN::Meta::Converter version 2.132660",
    "license" : [
       "artistic_2"
    ],
@@ -75,6 +75,6 @@
          "web" : "https://github.com/ggl/App-Sv"
       }
    },
-   "version" : "0.009",
+   "version" : "0.011",
    "x_authority" : "cpan:GVL"
 }

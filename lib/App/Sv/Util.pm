@@ -1,4 +1,4 @@
-package Sv::Util;
+package App::Sv::Util;
 
 use strict;
 use warnings;

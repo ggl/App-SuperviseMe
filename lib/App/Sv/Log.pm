@@ -1,4 +1,4 @@
-package Sv::Log;
+package App::Sv::Log;
 
 use strict;
 use warnings;
@@ -58,7 +58,7 @@ sub _log_format {
 	my @levels = qw(0 fatal alert crit error warn note info debug trace);
 	$ts = strftime($ts_fmt, localtime((int $ts)[0]));
 	
-	return "$ts $levels[$lvl] [$$] $msg\n"
+	return "$ts $levels[$lvl] $$ $msg\n"
 }
 
 1;

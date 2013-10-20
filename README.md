@@ -58,14 +58,14 @@ an anonymous hash with the following options:
 - run
 
     A hash reference with the commands to execute and monitor. Each command can be
-    a scalar, or a hash reference.
+    a string, or a hash reference.
 
 - run->{$name}->{cmd}
 
     The command to execute and monitor, along with command line options. Each
-    command should be a scalar. This can also be passed as `run->{$name}` if
+    command should be a string. This can also be passed as `run->{$name}` if
     no other options are specified. In this case the supervisor will use the
-    default values.
+    default values for the requred parameters.
 
 - run->{$name}->{start\_retries}
 
@@ -96,7 +96,12 @@ an anonymous hash with the following options:
 - run->{$name}->{umask}
 
     This option sets a custom umask in the child, before executing the command.
-    Its value is converted to octal.
+    Its value should be a string containing the octal digits.
+
+- run->{$name}->{cwd}
+
+    This option changes the child's working directory. Its value should be a
+    string representing a path.
 
 - run->{$name}->{env}
 

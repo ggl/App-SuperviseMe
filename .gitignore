@@ -6,6 +6,4 @@
 Build.PL
 TODO
 cpanfile
-dist.ini
-minil.toml
 !META.json
