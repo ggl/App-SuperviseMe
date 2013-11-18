@@ -7,6 +7,8 @@ requires 'AnyEvent', '6.01';
 requires 'YAML::Tiny';
 
 recommends 'EV';
+recommends 'Guard';
+recommends 'Async::Interrupt';
 
 on configure => sub {
 	requires 'Module::Build';

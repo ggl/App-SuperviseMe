@@ -62,10 +62,19 @@ an anonymous hash with the following options:
 
 - run->{$name}->{cmd}
 
-    The command to execute and monitor, along with command line options. Each
-    command should be a string. This can also be passed as `run->{$name}` if
-    no other options are specified. In this case the supervisor will use the
-    default values for the requred parameters.
+    A command to execute and monitor, along with command line options. Each
+    command should be a string or an array reference. This can also be passed
+    as `run->{$name}` if no other options are specified. In this case the
+    supervisor will use the default values for the requred parameters.
+
+- run->{$name}->{code}
+
+    A code reference to execute an monitor. This should be a code reference or
+    an array containing a code reference as the first element and the arguments
+    to be passed to the code reference as the subsequent elements. It can also
+    be passed as `run->{$name}` if no other options are specified in which
+    case the default parameters are used. The `run->{$name}-<{code}` and
+    `run->{$name}-<{cmd}` options are mutually exclusive.
 
 - run->{$name}->{start\_retries}
 
@@ -140,7 +149,7 @@ an anonymous hash with the following options:
 
     Enables logging at the given level and all lower (higher priority) levels. This
     should be an integer between 1 (fatal) and 9 (trace). For the actual names, see
-    [AnyEvent::Log](http://search.cpan.org/perldoc?AnyEvent::Log). If `SV_DEBUG` is set, this defaults to 8 (debug), otherwise
+    [AnyEvent::Log](https://metacpan.org/pod/AnyEvent::Log). If `SV_DEBUG` is set, this defaults to 8 (debug), otherwise
     it defaults to 5 (warn).
 
 - log->{file}
@@ -172,4 +181,4 @@ SIGTERM.
 
 # SEE ALSO
 
-[App::SuperviseMe](http://search.cpan.org/perldoc?App::SuperviseMe), [ControlFreak](http://search.cpan.org/perldoc?ControlFreak), [Supervisor](http://search.cpan.org/perldoc?Supervisor)
+[App::SuperviseMe](https://metacpan.org/pod/App::SuperviseMe), [ControlFreak](https://metacpan.org/pod/ControlFreak), [Supervisor](https://metacpan.org/pod/Supervisor)

@@ -1,12 +1,13 @@
 package App::Sv;
 # ABSTRACT: Event-based multi-process supervisor
-our $VERSION = '0.011';
+our $VERSION = '0.012';
 
 use 5.008001;
 use strict;
 use warnings;
 
 use Carp 'croak';
+use POSIX '_exit';
 use AnyEvent;
 use AnyEvent::Socket;
 use AnyEvent::Handle;
@@ -29,8 +30,8 @@ sub new {
 	
 	my $run = $conf->{run};
 	$conf->{global}->{log} = delete $conf->{log};
-	croak "Commands must be passed as a HASH ref" if ref $run ne 'HASH';
-	croak "Missing command list" unless scalar (keys %$run);
+	croak "Commands must be passed as a hash ref" if ref $run ne 'HASH';
+	croak "Missing command list" if !scalar (keys %$run);
 	
 	# set defaults
 	my $defaults = {
@@ -41,23 +42,43 @@ sub new {
 	};
 	# check options
 	foreach my $svc (keys %$run) {
-		unless ($run->{$svc}) {
+		if (!$run->{$svc}) {
 			croak "Missing command for \'$svc\'";
 		}
-		elsif (ref $run->{$svc} ne 'HASH') {
+		elsif (!ref $run->{$svc}) {
 			$run->{$svc} = { cmd => $run->{$svc} };
 		}
-		elsif (!$run->{$svc}->{cmd}) {
-			croak "Missing command for \'$svc\'";
+		elsif (ref $run->{$svc} eq 'CODE') {
+			$run->{$svc} = { code => $run->{$svc} };
 		}
-		$run->{$svc}->{name} = $svc;
-		foreach my $opt (keys %$defaults) {
-			unless (defined $run->{$svc}->{$opt}) {
-				$run->{$svc}->{$opt} = $defaults->{$opt};
+		elsif (ref $run->{$svc} eq 'ARRAY') {
+			if (!$run->{$svc}->[0]) {
+				croak "Missing command for \'$svc\'";
 			}
-			elsif ($opt =~ /delay|wait/ && $run->{$svc}->{$opt} <= 0) {
-				$run->{$svc}->{$opt} = $defaults->{$opt};
+			elsif (!ref $run->{$svc}->[0]) {
+				$run->{$svc} = { cmd => $run->{$svc} };
 			}
+			elsif (ref $run->{$svc}->[0] eq 'CODE') {
+				$run->{$svc} = { code => $run->{$svc} };
+			}
+		}
+		
+		if (ref $run->{$svc} eq 'HASH') {
+			if (!$run->{$svc}->{cmd} && !$run->{$svc}->{code}) {
+				croak "Missing command for \'$svc\'"
+			}
+			$run->{$svc}->{name} = $svc;
+			foreach my $opt (keys %$defaults) {
+				if (!defined $run->{$svc}->{$opt}) {
+					$run->{$svc}->{$opt} = $defaults->{$opt};
+				}
+				elsif ($opt =~ /delay|wait/ && $run->{$svc}->{$opt} <= 0) {
+					$run->{$svc}->{$opt} = $defaults->{$opt};
+				}
+			}
+		}
+		else {
+			croak "Missing command for \'$svc\'";
 		}
 	}
 	
@@ -80,7 +101,6 @@ sub run {
 		$self->_signal_all_svc('TERM');
 		$cv->send
 	};
-	
 	# set global umask
 	umask oct($self->{conf}->{umask}) if $self->{conf}->{umask};
 	# initialize logger
@@ -140,10 +160,26 @@ sub _start_svc {
 		# set environment
 		%ENV = %{$svc->{env}} if $svc->{env} && ref $svc->{env} eq 'HASH';
 		# start process
-		my $cmd = $svc->{cmd};
-		$debug->("Executing '$cmd'");
-		exec($cmd);
-		exit(1);
+		if ($svc->{cmd} && !ref $svc->{cmd}) {
+			$debug->("Executing command '$svc->{name}'");
+			exec($svc->{cmd});
+		}
+		elsif ($svc->{cmd} && ref $svc->{cmd} eq 'ARRAY') {
+			$debug->("Executing command '$svc->{name}'");
+			exec(@{$svc->{cmd}});
+		}
+		elsif ($svc->{code} && ref $svc->{code} eq 'CODE') {
+			$debug->("Executing code '$svc->{name}'");
+			$svc->{code}->();
+		}
+		elsif ($svc->{code} && ref $svc->{code} eq 'ARRAY') {
+			my $code = shift @{$svc->{code}};
+			if (ref $code eq 'CODE') {
+				$debug->("Executing code '$svc->{name}'");
+				$code->(@{$svc->{code}});
+			}
+		}
+		POSIX::_exit(1);
 	}
 	else {
 		# parent
@@ -285,7 +321,7 @@ sub _listener {
 	sub { $self->_client_conn(@_) },
 	sub {
 		my ($fh, $host, $port) = @_;
-		$debug->("Listener bound to $host:$port");
+		$debug->("Listening at $host:$port");
 	};
 }
 
@@ -525,10 +561,19 @@ a string, or a hash reference.
 
 =item run->{$name}->{cmd}
 
-The command to execute and monitor, along with command line options. Each
-command should be a string. This can also be passed as C<run-E<gt>{$name}> if
-no other options are specified. In this case the supervisor will use the
-default values for the requred parameters.
+A command to execute and monitor, along with command line options. Each
+command should be a string or an array reference. This can also be passed
+as C<run-E<gt>{$name}> if no other options are specified. In this case the
+supervisor will use the default values for the requred parameters.
+
+=item run->{$name}->{code}
+
+A code reference to execute an monitor. This should be a code reference or
+an array containing a code reference as the first element and the arguments
+to be passed to the code reference as the subsequent elements. It can also
+be passed as C<run-E<gt>{$name}> if no other options are specified in which
+case the default parameters are used. The C<run-E<gt>{$name}-<{code}> and
+C<run-E<gt>{$name}-<{cmd}> options are mutually exclusive.
 
 =item run->{$name}->{start_retries}
 

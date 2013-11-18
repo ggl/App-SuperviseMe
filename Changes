@@ -1,6 +1,13 @@
 Revision history for Perl module App::Sv
 
 {{$NEXT}}
+  * Added support for executing code references
+  * Added support for passing args as arrays to run
+  * Added tests more tests for run options
+  * Modified the documentation to reflect the above changes
+  * Replace exit() with POSIX::_exit() to prevent listener from being destroyed
+
+0.011 2013-10-20T19:40:44Z
   * Fixed namespaces for modules under App::Sv
   * Added experimental run->{cwd} option
 
