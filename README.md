@@ -74,7 +74,7 @@ an anonymous hash with the following options:
     to be passed to the code reference as the subsequent elements. It can also
     be passed as `run->{$name}` if no other options are specified in which
     case the default parameters are used. The `run->{$name}-<{code}` and
-    `run->{$name}-<{cmd}` options are mutually exclusive.
+    `run->{$name}-`{cmd}> options are mutually exclusive.
 
 - run->{$name}->{start\_retries}
 

@@ -1,6 +1,6 @@
 package App::Sv;
 # ABSTRACT: Event-based multi-process supervisor
-our $VERSION = '0.012';
+our $VERSION = '0.013';
 
 use 5.008001;
 use strict;
@@ -489,6 +489,7 @@ sub _status {
 		$st = ref $st eq 'ARRAY' ? join(' ', @$st) : $st;
 		$hdl->push_write("$key $st\n");
 	}
+	$hdl->push_write("\n");
 }
 
 1;
@@ -573,7 +574,7 @@ an array containing a code reference as the first element and the arguments
 to be passed to the code reference as the subsequent elements. It can also
 be passed as C<run-E<gt>{$name}> if no other options are specified in which
 case the default parameters are used. The C<run-E<gt>{$name}-<{code}> and
-C<run-E<gt>{$name}-<{cmd}> options are mutually exclusive.
+C<run-E<gt>{$name}->{cmd}> options are mutually exclusive.
 
 =item run->{$name}->{start_retries}
 

@@ -1,6 +1,9 @@
 Revision history for Perl module App::Sv
 
 {{$NEXT}}
+  * Fixed svc
+
+0.012 2013-11-18T16:21:26Z
   * Added support for executing code references
   * Added support for passing args as arrays to run
   * Added tests more tests for run options

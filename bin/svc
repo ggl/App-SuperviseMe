@@ -60,26 +60,27 @@ sub _connect {
 		my $res;
 		my $hdl; $hdl = AnyEvent::Handle->new(
 			fh => $fh,
+			timeout => 5,
 			on_eof => sub {
 				$hdl->destroy();
-				print("ok\n");
-				$cv->send;
+				$cv->send($res);
 			},
 			on_error => sub {
-				print("error\n");
 				$hdl->destroy();
-				$cv->send;
+				$cv->send("error\n");
 			}
 		);
 
 		$hdl->push_write("$args\n");
-		$hdl->push_read(line => sub {
-			my ($hdl, $ln) = @_;
+		$hdl->on_read(sub {
+			my $hdl = shift;
 			
-			$hdl->on_read(sub {
-				$cv->send($_[0]->rbuf);
+			$hdl->push_read(line => sub {
+				my ($hdl, $ln) = @_;
+				$res .= $ln ? "$ln\n" : '';
 			});
 		});
+		$hdl->push_write(".\n");
 	};
 	
 	return $cv;
