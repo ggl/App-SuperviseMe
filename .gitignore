@@ -3,7 +3,9 @@
 .build
 .prove
 .fslckout
-Build.PL
+.build
+Build
 TODO
-cpanfile
 !META.json
+META.yml
+MYMETA.*

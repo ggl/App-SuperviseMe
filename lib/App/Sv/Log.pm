@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 use Carp 'croak';
-use POSIX 'strftime';
+use POSIX;
 use AnyEvent::Log;
 
 # Loggers
@@ -56,7 +56,7 @@ sub _log_format {
 	
 	my $ts_fmt =  $self->{ts_format} || "%Y-%m-%dT%H:%M:%S%z";
 	my @levels = qw(0 fatal alert crit error warn note info debug trace);
-	$ts = strftime($ts_fmt, localtime((int $ts)[0]));
+	$ts = POSIX::strftime($ts_fmt, localtime((int $ts)[0]));
 	
 	return "$ts $levels[$lvl] $$ $msg\n"
 }

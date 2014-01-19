@@ -1,5 +1,5 @@
 name = "App-Sv"
-authors = ['Gelu Lupaş <gvl@cpan.org>', 'Pedro Melo <melo@simplicidade.org>']
+authors = ['Gelu Lupaş <gvl@cpan.org>']
 authority = "cpan:GVL"
 license = "artistic_2"
 readme_from = "lib/App/Sv.pm"

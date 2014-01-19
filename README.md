@@ -73,8 +73,8 @@ an anonymous hash with the following options:
     an array containing a code reference as the first element and the arguments
     to be passed to the code reference as the subsequent elements. It can also
     be passed as `run->{$name}` if no other options are specified in which
-    case the default parameters are used. The `run->{$name}-<{code}` and
-    `run->{$name}-`{cmd}> options are mutually exclusive.
+    case the default parameters are used. The `run->{$name}->{code}`
+    and `run->{$name}->{cmd}` options are mutually exclusive.
 
 - run->{$name}->{start\_retries}
 
@@ -111,6 +111,11 @@ an anonymous hash with the following options:
 
     This option changes the child's working directory. Its value should be a
     string representing a path.
+
+- run->{$name}->{setsid}
+
+    This option specifies if a new session shall be created for the child, thus
+    setting it as the process group leader. The default is 1, meaning yes.
 
 - run->{$name}->{env}
 
@@ -179,6 +184,27 @@ SIGTERM.
 
     If set to a true value, the supervisor will show debugging information.
 
+# AUTHOR
+
+Gelu Lupaş <gvl@cpan.org>
+
+# CONTRIBUTORS
+ 
+
+- Pedro Melo <melo@simplicidade.org>
+
 # SEE ALSO
 
 [App::SuperviseMe](https://metacpan.org/pod/App::SuperviseMe), [ControlFreak](https://metacpan.org/pod/ControlFreak), [Supervisor](https://metacpan.org/pod/Supervisor)
+
+# COPYRIGHT AND LICENSE
+ 
+
+Copyright (c) 2011-2014 the App::Sv ["AUTHOR"](#AUTHOR) and ["CONTRIBUTORS"](#CONTRIBUTORS) as listed
+above.
+ 
+
+This is free software, licensed under:
+ 
+
+    The Artistic License 2.0 (GPL Compatible)s

@@ -1,13 +1,13 @@
 package App::Sv;
 # ABSTRACT: Event-based multi-process supervisor
-our $VERSION = '0.013';
+our $VERSION = '0.014';
 
 use 5.008001;
 use strict;
 use warnings;
 
 use Carp 'croak';
-use POSIX '_exit';
+use POSIX;
 use AnyEvent;
 use AnyEvent::Socket;
 use AnyEvent::Handle;
@@ -38,7 +38,8 @@ sub new {
 		start_retries => 8,
 		restart_delay => 1,
 		start_wait => 1,
-		stop_wait => 0
+		stop_wait => 0,
+		setsid => 1
 	};
 	# check options
 	foreach my $svc (keys %$run) {
@@ -159,6 +160,11 @@ sub _start_svc {
 		}
 		# set environment
 		%ENV = %{$svc->{env}} if $svc->{env} && ref $svc->{env} eq 'HASH';
+		# set session id
+		if ($svc->{setsid}) {
+			$svc->{pgrp} = POSIX::setsid()
+				or $warn->("Failed setsid for '$svc->{name}': $!");
+		};
 		# start process
 		if ($svc->{cmd} && !ref $svc->{cmd}) {
 			$debug->("Executing command '$svc->{name}'");
@@ -573,8 +579,8 @@ A code reference to execute an monitor. This should be a code reference or
 an array containing a code reference as the first element and the arguments
 to be passed to the code reference as the subsequent elements. It can also
 be passed as C<run-E<gt>{$name}> if no other options are specified in which
-case the default parameters are used. The C<run-E<gt>{$name}-<{code}> and
-C<run-E<gt>{$name}->{cmd}> options are mutually exclusive.
+case the default parameters are used. The C<run-E<gt>{$name}-E<gt>{code}>
+and C<run-E<gt>{$name}-E<gt>{cmd}> options are mutually exclusive.
 
 =item run->{$name}->{start_retries}
 
@@ -611,6 +617,11 @@ Its value should be a string containing the octal digits.
 
 This option changes the child's working directory. Its value should be a
 string representing a path.
+
+=item run->{$name}->{setsid}
+
+This option specifies if a new session shall be created for the child, thus
+setting it as the process group leader. The default is 1, meaning yes.
 
 =item run->{$name}->{env}
 
@@ -685,8 +696,31 @@ If set to a true value, the supervisor will show debugging information.
 
 =back
 
+=head1 AUTHOR
+
+Gelu Lupaş <gvl@cpan.org>
+
+=head1 CONTRIBUTORS
+ 
+=over 4
+ 
+=item * 
+
+Pedro Melo <melo@simplicidade.org>
+
+=back
+
 =head1 SEE ALSO
 
 L<App::SuperviseMe>, L<ControlFreak>, L<Supervisor>
+
+=head1 COPYRIGHT AND LICENSE
+ 
+Copyright (c) 2011-2014 the App::Sv L</AUTHOR> and L</CONTRIBUTORS> as listed
+above.
+ 
+This is free software, licensed under:
+ 
+  The Artistic License 2.0 (GPL Compatible)s
 
 =cut

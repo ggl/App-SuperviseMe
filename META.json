@@ -1,11 +1,10 @@
 {
    "abstract" : "Event-based multi-process supervisor",
    "author" : [
-      "Gelu Lupaş <gvl@cpan.org>",
-      "Pedro Melo <melo@simplicidade.org>"
+      "Gelu Lupaş <gvl@cpan.org>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Minilla/v0.11.0, CPAN::Meta::Converter version 2.132660",
+   "generated_by" : "Minilla/v0.11.0, CPAN::Meta::Converter version 2.133380",
    "license" : [
       "artistic_2"
    ],
@@ -77,6 +76,9 @@
          "web" : "https://github.com/ggl/App-Sv"
       }
    },
-   "version" : "0.013",
-   "x_authority" : "cpan:GVL"
+   "version" : "0.014",
+   "x_authority" : "cpan:GVL",
+   "x_contributors" : [
+      "Pedro Melo <melo@simplicidade.org>"
+   ]
 }

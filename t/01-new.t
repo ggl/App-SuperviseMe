@@ -24,7 +24,8 @@ subtest 'basic constructor' => sub {
 				start_retries => 8,
 				restart_delay => 1,
 				start_wait => 1,
-				stop_wait => 0
+				stop_wait => 0,
+				setsid => 1
 			}
 		},
 		'... with the expected command list'
@@ -43,7 +44,8 @@ subtest 'basic constructor' => sub {
 				start_retries => 8,
 				restart_delay => 1,
 				start_wait => 1,
-				stop_wait => 0
+				stop_wait => 0,
+				setsid => 1
 			}
 		},
 		'... with the expected command list'
@@ -62,7 +64,8 @@ subtest 'basic constructor' => sub {
 				start_retries => 8,
 				restart_delay => 1,
 				start_wait => 1,
-				stop_wait => 0
+				stop_wait => 0,
+				setsid => 1,
 			},
 			b => {
 				cmd => 'b',
@@ -70,7 +73,8 @@ subtest 'basic constructor' => sub {
 				start_retries => 8,
 				restart_delay => 1,
 				start_wait => 1,
-				stop_wait => 0
+				stop_wait => 0,
+				setsid => 1
 			}
 		},
 		'... with the expected command list'
@@ -90,7 +94,8 @@ subtest 'basic constructor' => sub {
 				start_retries => 8,
 				restart_delay => 1,
 				start_wait => 1,
-				stop_wait => 0
+				stop_wait => 0,
+				setsid => 1
 			}
 		},
 		'... with the expected command list'
@@ -109,7 +114,8 @@ subtest 'basic constructor' => sub {
 				start_retries => 8,
 				restart_delay => 1,
 				start_wait => 1,
-				stop_wait => 0
+				stop_wait => 0,
+				setsid => 1
 			}
 		},
 		'... with the expected command list'
