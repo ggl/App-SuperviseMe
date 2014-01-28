@@ -1,6 +1,6 @@
 package App::Sv;
 # ABSTRACT: Event-based multi-process supervisor
-our $VERSION = '0.014';
+our $VERSION = '0.015';
 
 use 5.008001;
 use strict;
@@ -696,6 +696,10 @@ If set to a true value, the supervisor will show debugging information.
 
 =back
 
+=head1 SEE ALSO
+
+L<App::SuperviseMe>, L<ControlFreak>, L<Supervisor>
+
 =head1 AUTHOR
 
 Gelu Lupaş <gvl@cpan.org>
@@ -709,10 +713,6 @@ Gelu Lupaş <gvl@cpan.org>
 Pedro Melo <melo@simplicidade.org>
 
 =back
-
-=head1 SEE ALSO
-
-L<App::SuperviseMe>, L<ControlFreak>, L<Supervisor>
 
 =head1 COPYRIGHT AND LICENSE
  

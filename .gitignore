@@ -1,10 +1,14 @@
 /App-Sv-*
 .*
+*~
+*.bak
+*.old
 .build
 .prove
 .fslckout
-.build
 Build
+blib
+_build
 TODO
 !META.json
 META.yml

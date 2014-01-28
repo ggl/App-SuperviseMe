@@ -3,7 +3,6 @@
 use strict;
 use warnings;
 use Test::More;
-use Test::Deep;
 use Test::Fatal;
 use App::Sv;
 
@@ -15,7 +14,7 @@ subtest 'basic constructor' => sub {
 		undef, 'new() lives with a simple command');
 	ok($sm, '... got something back');
 	is(ref($sm), 'App::Sv', '... of the proper type');
-	cmp_deeply(
+	is_deeply(
 		$sm->{run}, 
 		{
 			a => {
@@ -35,7 +34,7 @@ subtest 'basic constructor' => sub {
 		undef, 'new() lives with a simple array command');
 	ok($sm, '... got something back');
 	is(ref($sm), 'App::Sv', '... of the proper type');
-	cmp_deeply(
+	is_deeply(
 		$sm->{run}, 
 		{
 			a => {
@@ -56,7 +55,7 @@ subtest 'basic constructor' => sub {
 		undef, 'new() lives with two commands, one simple, one complex');
 	ok($sm, '... got something back');
 	is(ref($sm), 'App::Sv', '... of the proper type');
-	cmp_deeply($sm->{run},
+	is_deeply($sm->{run},
 		{
 			a => {
 				cmd => 'a',
@@ -85,7 +84,7 @@ subtest 'basic constructor' => sub {
 		undef, 'new() lives with a simple code ref');
 	ok($sm, '... got something back');
 	is(ref($sm), 'App::Sv', '... of the proper type');
-	cmp_deeply(
+	is_deeply(
 		$sm->{run}, 
 		{
 			a => {
@@ -105,7 +104,7 @@ subtest 'basic constructor' => sub {
 		undef, 'new() lives with a array code ref');
 	ok($sm, '... got something back');
 	is(ref($sm), 'App::Sv', '... of the proper type');
-	cmp_deeply(
+	is_deeply(
 		$sm->{run}, 
 		{
 			a => {

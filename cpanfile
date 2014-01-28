@@ -15,7 +15,6 @@ on configure => sub {
 };
 
 on build => sub {
-	requires 'Test::Deep';
 	requires 'Test::Fatal';
 	requires 'Test::More', '0.98';
 };

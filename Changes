@@ -1,6 +1,9 @@
 Revision history for Perl module App::Sv
 
 {{$NEXT}}
+  * Removed Test::Deep buld dependency
+  
+0.014 2014-01-19T11:12:59Z
   * Supervised services now run in their own process group
   * Updated documentation and test suite
 

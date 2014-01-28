@@ -28,7 +28,6 @@
    "prereqs" : {
       "build" : {
          "requires" : {
-            "Test::Deep" : "0",
             "Test::Fatal" : "0",
             "Test::More" : "0.98"
          }
@@ -76,7 +75,7 @@
          "web" : "https://github.com/ggl/App-Sv"
       }
    },
-   "version" : "0.014",
+   "version" : "0.015",
    "x_authority" : "cpan:GVL",
    "x_contributors" : [
       "Pedro Melo <melo@simplicidade.org>"

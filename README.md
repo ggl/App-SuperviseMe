@@ -184,6 +184,10 @@ SIGTERM.
 
     If set to a true value, the supervisor will show debugging information.
 
+# SEE ALSO
+
+[App::SuperviseMe](https://metacpan.org/pod/App::SuperviseMe), [ControlFreak](https://metacpan.org/pod/ControlFreak), [Supervisor](https://metacpan.org/pod/Supervisor)
+
 # AUTHOR
 
 Gelu Lupaş <gvl@cpan.org>
@@ -192,10 +196,6 @@ Gelu Lupaş <gvl@cpan.org>
  
 
 - Pedro Melo <melo@simplicidade.org>
-
-# SEE ALSO
-
-[App::SuperviseMe](https://metacpan.org/pod/App::SuperviseMe), [ControlFreak](https://metacpan.org/pod/ControlFreak), [Supervisor](https://metacpan.org/pod/Supervisor)
 
 # COPYRIGHT AND LICENSE
  
